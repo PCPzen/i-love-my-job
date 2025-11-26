@@ -1,10 +1,5 @@
 <?php
 require("../conn.php");
-header("Content-Type: application/json; charset=UTF-8");
-header("Access-Control-Allow-Origin: http://localhost:5173"); // อนุญาตเฉพาะโดเมนนี้
-header("Access-Control-Allow-Methods: POST, GET, OPTIONS"); // อนุญาต method ที่ใช้
-header("Access-Control-Allow-Headers: Content-Type, Authorization"); // อนุญาต headers ที่ใช้
-header("Content-Type: application/json; charset=UTF-8");
 
 try {
     // รับข้อมูลจาก client ในรูปแบบ JSON

@@ -1,19 +1,20 @@
-<IfModule mod_headers.c>
-    # อนุญาตให้ทุก Origin เข้าถึงได้ (สามารถเปลี่ยน "*" เป็นโดเมนของ React ได้ เช่น "http://localhost:5173")
-    Header set Access-Control-Allow-Origin "*"
-    
-    # อนุญาต Method ที่จำเป็น (GET, POST, OPTIONS, PUT, DELETE)
-    Header set Access-Control-Allow-Methods "GET, POST, OPTIONS, PUT, DELETE"
-    
-    # อนุญาต Headers ที่จำเป็น
-    Header set Access-Control-Allow-Headers "Content-Type, Authorization, Origin, X-Requested-With"
-</IfModule>
-
 <IfModule mod_rewrite.c>
     RewriteEngine On
-    
-    # จัดการกับ OPTIONS pre-flight request
-    # ถ้ามี request แบบ OPTIONS เข้ามา ให้ตอบกลับ 200 OK ทันที (เพื่อบอก Browser ว่าอนุญาต)
+    RewriteBase /i-love-my-job-main/server/api/
+
+    # Handle Authorization Header
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+    # Handle Preflight OPTIONS requests (Optional if handled by PHP, but good to have)
     RewriteCond %{REQUEST_METHOD} OPTIONS
     RewriteRule ^(.*)$ $1 [R=200,L]
+</IfModule>
+
+<IfModule mod_headers.c>
+    # Force overwrite of CORS headers to prevent duplicates
+    Header always set Access-Control-Allow-Origin "http://localhost:5173"
+    Header always set Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+    Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With"
+    Header always set Access-Control-Allow-Credentials "false"
 </IfModule>

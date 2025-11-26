@@ -1,5 +1,6 @@
 <?php
 require("../conn.php");
+
 header("Content-Type: application/json; charset=UTF-8");
 
 // รับค่าที่ส่งมาจาก React

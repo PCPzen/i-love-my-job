@@ -1,6 +1,8 @@
 <?php
-header('Access-Control-Allow-Origin: *');
+header("Access-Control-Allow-Origin: http://localhost:5173");
 header('Content-Type: application/json');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
+
 include_once '../conn.php';
 
 if (!isset($_GET['planid'])) {
@@ -9,16 +11,18 @@ if (!isset($_GET['planid'])) {
 }
 $planid = $_GET['planid'];
 
-// ดึง sublevel ที่ไม่ซ้ำกัน
-$sql = "SELECT DISTINCT sublevel FROM group_information WHERE planid = ? AND sublevel IS NOT NULL ORDER BY sublevel";
-$stmt = $conn->prepare($sql);
-$stmt->bind_param("i", $planid);
-$stmt->execute();
-$result = $stmt->get_result();
-$levels = [];
-while ($row = $result->fetch_assoc()) {
-    $levels[] = $row;
+try {
+    // ดึง sublevel ที่ไม่ซ้ำกัน
+    $sql = "SELECT DISTINCT sublevel FROM group_information WHERE planid = :planid AND sublevel IS NOT NULL ORDER BY sublevel";
+    $stmt = $conn->prepare($sql);
+    $stmt->bindParam(':planid', $planid, PDO::PARAM_INT);
+    $stmt->execute();
+
+    $levels = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    echo json_encode($levels);
+} catch (Exception $e) {
+    echo json_encode(['error' => $e->getMessage()]);
 }
-echo json_encode($levels);
-$conn->close();
+
+$conn = null;
 ?>

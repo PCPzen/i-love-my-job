@@ -1,9 +1,6 @@
 <?php
 require_once '../conn.php';
 
-header("Access-Control-Allow-Origin: *");
-header("Content-Type: application/json");
-
 $planid = isset($_GET['planid']) ? intval($_GET['planid']) : 0;
 
 try {

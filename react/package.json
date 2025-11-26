@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --mode devlopment",
+    "dev": "vite --mode development",
     "build": "vite build --mode production",
     "lint": "eslint .",
     "preview": "vite preview"
@@ -18,7 +18,7 @@
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.3.0",
     "scrollreveal": "^4.0.9",
-    "sweetalert2": "^11.17.2",
+    "sweetalert2": "^11.26.3",
     "tailwindcss": "^4.0.11"
   },
   "devDependencies": {

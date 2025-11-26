@@ -32,25 +32,25 @@ function Mohou() {
     const [creditE, setCreditE] = useState(0); // เงื่อนไข E
     const [creditF, setCreditF] = useState(0); // เงื่อนไข F
     const [creditG, setCreditG] = useState(0); // เงื่อนไข F
-    const [totalRemedial, setCreditRemedial] = useState(0); 
+    const [totalRemedial, setCreditRemedial] = useState(0);
     const [totalCredits, setTotalCredits] = useState(0); // คำนวณรวมหน่วยกิตทั้งหมด
 
     useEffect(() => {
         const fetchSubjectData = async () => {
             try {
-                const response = await axios.get(`${API_BASE_URL}/server/api/GET/get_mohou.php`, {
+                const response = await axios.get(`${API_BASE_URL}/api/GET/get_mohou.php`, {
                     params: { planid }
                 });
-    
+
                 console.log("Response data: ", response.data);
                 // กรองข้อมูลโดยเปลี่ยนเป็น Number เพื่อให้แน่ใจว่าการเปรียบเทียบตรงกัน
                 const filteredData = response.data.filter(
                     subject => Number(subject.planid) === Number(planid)
                 );
-    
+
                 setSubjectData(filteredData);
                 console.log("Subject data: ", filteredData);
-    
+
                 // คำนวณ Credit ตามเงื่อนไข
                 const totalA = filteredData.reduce((total, subject) => {
                     if (
@@ -61,7 +61,7 @@ function Mohou() {
                     }
                     return total;
                 }, 0);
-    
+
                 const totalB = filteredData.reduce((total, subject) => {
                     if (
                         subject.subject_category === "1.หมวดวิชาสมรรถนะแกนกลาง" &&
@@ -71,7 +71,7 @@ function Mohou() {
                     }
                     return total;
                 }, 0);
-    
+
                 const totalC = filteredData.reduce((total, subject) => {
                     if (
                         subject.subject_category === "1.หมวดวิชาสมรรถนะแกนกลาง" &&
@@ -81,7 +81,7 @@ function Mohou() {
                     }
                     return total;
                 }, 0);
-    
+
                 const totalD = filteredData.reduce((total, subject) => {
                     if (
                         subject.subject_category === "2.หมวดวิชาสมรรถนะวิชาชีพ" &&
@@ -91,7 +91,7 @@ function Mohou() {
                     }
                     return total;
                 }, 0);
-    
+
                 const totalE = filteredData.reduce((total, subject) => {
                     if (
                         subject.subject_category === "2.หมวดวิชาสมรรถนะวิชาชีพ" &&
@@ -101,21 +101,21 @@ function Mohou() {
                     }
                     return total;
                 }, 0);
-    
+
                 const totalF = filteredData.reduce((total, subject) => {
                     if (subject.subject_category === "3.หมวดวิชาเลือกเสรี") {
                         return total + Number(subject.credit);
                     }
                     return total;
                 }, 0);
-    
+
                 const totalG = filteredData.reduce((total, subject) => {
                     if (subject.subject_category === "4.กิจกรรมเสริมหลักสูตร") {
                         return total + Number(subject.credit);
                     }
                     return total;
                 }, 0);
-    
+
                 // คำนวณหน่วยกิตของ "รายวิชาปรับพื้นฐาน"
                 const totalRemedial = filteredData.reduce((total, subject) => {
                     if (
@@ -125,7 +125,7 @@ function Mohou() {
                     }
                     return total;
                 }, 0);
-    
+
                 // ตั้งค่า state สำหรับ Credit
                 setCreditA(totalA);
                 setCreditB(totalB);
@@ -134,46 +134,46 @@ function Mohou() {
                 setCreditE(totalE);
                 setCreditF(totalF);
                 setCreditG(totalG);
-    
+
                 // ตั้งค่าหน่วยกิตของรายวิชาปรับพื้นฐาน
                 setCreditRemedial(totalRemedial);
-    
+
                 // คำนวณหน่วยกิตรวม
-                const total = totalA + totalB + totalC + totalD + totalE + totalF + totalRemedial ;
+                const total = totalA + totalB + totalC + totalD + totalE + totalF + totalRemedial;
                 setTotalCredits(total);
-    
+
             } catch (error) {
                 setError('ไม่สามารถดึงข้อมูลได้');
                 console.error("Error fetching data: ", error);
             }
         };
-    
+
         fetchSubjectData();
     }, [planid, API_BASE_URL]);
-    
+
 
     console.log("Credit A: ", creditA);
     console.log("Credit D: ", creditD);
     console.log("Credit E: ", creditE);
     console.log("Credit F: ", creditF);
     console.log("Credit G: ", creditG);
-    
 
 
 
 
 
-    const sum = (creditA + creditB+creditC);
+
+    const sum = (creditA + creditB + creditC);
     const sum2 = (creditD + creditE);
-    const sum3 = (creditA + creditB+creditC+creditD+creditE+creditF);
+    const sum3 = (creditA + creditB + creditC + creditD + creditE + creditF);
     console.log(sum);
     console.log(sum2);
     console.log(sum3);
-    
+
     const handleBack = () => {
         navigate(-1);
     };
-    
+
 
     return (
         <div className="flex h-screen">
@@ -182,7 +182,7 @@ function Mohou() {
             </div>
 
             <div className="flex-1 ml-72 p-6 overflow-auto">
-            <button onClick={handleBack} className="mb-6 flex items-center gap-2 px-4 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-md hover:shadow-lg transition-all duration-200 cursor-pointer">
+                <button onClick={handleBack} className="mb-6 flex items-center gap-2 px-4 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-md hover:shadow-lg transition-all duration-200 cursor-pointer">
                     <ArrowLeft size={20} />
                     <span className="font-medium">ย้อนกลับ</span>
                 </button>
@@ -196,35 +196,35 @@ function Mohou() {
                 <div className="text-center mt-6 text-lg text-gray-700">
                     <label className="flex justify-center">แบบสรุปโครงสร้างหลักสูตร</label>
                     <p>
-                        หลักสูตร <span className="text-red-500">{selectedCourse} </span> 
-                        พุทธศักราช <span className="text-red-500">{selectedYear}</span> ใช้สำหรับนักศึกษา 
+                        หลักสูตร <span className="text-red-500">{selectedCourse} </span>
+                        พุทธศักราช <span className="text-red-500">{selectedYear}</span> ใช้สำหรับนักศึกษา
                         รหัสนักศึกษา <span className="text-red-500">{selectedStudentId}</span>
                     </p>
                     <p>ประเภทวิชา อุตสาหกรรมดิจิทัลและเทคโนโลยีสารสนเทศ</p>
                     <p>กลุ่มอาชีพ ฮาร์ดแวร์ สาขาวิชา ข้างเทคนิคคอมพิวเตอร์</p>
                     <p>วิทยาลัยเทคนิคแพร่</p>
                 </div>
-         
+
                 <div className="flex flex-row mt-6">
-    {/* ข้อความเพิ่มเติมด้านซ้าย */}
-    <div className="mt-8 text-lg text-gray-700 w-1/2">
-        <p>หมวดวิชา</p>
-        <p><strong>1. หมวดวิชาสรรถนะแกนกลาง  (ไม่น้อยกว่า)</strong></p>
-        <p className="ml-4 mt-2">1.1. กลุ่มสมรรถนะภาษาและการสื่อสาร (ไม่น้อยกว่า)</p>
-        <p className="ml-4 mt-2">1.2. กลุ่มสมรรถนะการคิดและการแก้ปัญหา (ไม่น้อยกว่า)</p>
-        <p className="ml-4 mt-2">1.3. กลุ่มสมรรถนะสังคมและการดำรงชีวิต (ไม่น้อยกว่า)</p>
-        
-        <p className="mt-2"><strong>รายวิชาปรับพื้นฐาน</strong></p> {/* เพิ่ม mt-4 ที่นี่ */}
+                    {/* ข้อความเพิ่มเติมด้านซ้าย */}
+                    <div className="mt-8 text-lg text-gray-700 w-1/2">
+                        <p>หมวดวิชา</p>
+                        <p><strong>1. หมวดวิชาสรรถนะแกนกลาง  (ไม่น้อยกว่า)</strong></p>
+                        <p className="ml-4 mt-2">1.1. กลุ่มสมรรถนะภาษาและการสื่อสาร (ไม่น้อยกว่า)</p>
+                        <p className="ml-4 mt-2">1.2. กลุ่มสมรรถนะการคิดและการแก้ปัญหา (ไม่น้อยกว่า)</p>
+                        <p className="ml-4 mt-2">1.3. กลุ่มสมรรถนะสังคมและการดำรงชีวิต (ไม่น้อยกว่า)</p>
 
-        <p className="mt-2"><strong>2. หมวดวิชาสมรรถนะวิชาชีพ (ไม่น้อยกว่า)</strong></p>
-        <p className="ml-4 mt-2">2.1. กลุ่มสมรรถนะวิชาชีพพื้นฐาน (ไม่น้อยกว่า)</p>
-        <p className="ml-4 mt-2">2.2. กลุ่มสมรรถนะวิชาชีพเฉพาะ (ไม่น้อยกว่า)</p>
+                        <p className="mt-2"><strong>รายวิชาปรับพื้นฐาน</strong></p> {/* เพิ่ม mt-4 ที่นี่ */}
 
-        <p className="mt-2"><strong>3. หมวดวิชาเลือกเสรี (ไม่น้อยกว่า)</strong></p>
-        <p className="mt-2"><strong>รวมหน่วยกิตทั้งหมด (ไม่น้อยกว่า)</strong></p>
+                        <p className="mt-2"><strong>2. หมวดวิชาสมรรถนะวิชาชีพ (ไม่น้อยกว่า)</strong></p>
+                        <p className="ml-4 mt-2">2.1. กลุ่มสมรรถนะวิชาชีพพื้นฐาน (ไม่น้อยกว่า)</p>
+                        <p className="ml-4 mt-2">2.2. กลุ่มสมรรถนะวิชาชีพเฉพาะ (ไม่น้อยกว่า)</p>
 
-        <p className="mt-3"><strong>4. กิจกรรมเสริมหลักสูตร</strong></p>
-    </div>  
+                        <p className="mt-2"><strong>3. หมวดวิชาเลือกเสรี (ไม่น้อยกว่า)</strong></p>
+                        <p className="mt-2"><strong>รวมหน่วยกิตทั้งหมด (ไม่น้อยกว่า)</strong></p>
+
+                        <p className="mt-3"><strong>4. กิจกรรมเสริมหลักสูตร</strong></p>
+                    </div>
 
 
 
@@ -244,20 +244,18 @@ function Mohou() {
                                 <tr>
                                     <td className="border border-gray-800 px-4 py-2 text-center text-black">15</td>
                                     <td className="border border-gray-800 px-4 py-2 text-center text-black">หน่วยกิต</td>
-                                    <th className={`border border-gray-800 px-4 py-2 text-center ${
-                                        (creditA + creditB + creditC) !== 15 ? 'text-red-500' : 'text-green-500'
-                                    }`}>
+                                    <th className={`border border-gray-800 px-4 py-2 text-center ${(creditA + creditB + creditC) !== 15 ? 'text-red-500' : 'text-green-500'
+                                        }`}>
                                         {creditA + creditB + creditC}
                                     </th>
                                     <td className="border border-gray-800 px-4 py-2 text-center text-black">หน่วยกิต</td>
                                 </tr>
-                             
+
                                 <tr>
                                     <td className="border border-gray-800 px-4 py-2 text-center text-black">6</td>
                                     <td className="border border-gray-800 px-4 py-2 text-center text-black">หน่วยกิต</td>
-                                    <th className={`border border-gray-800 px-4 py-2 text-center ${
-                                        creditA !== 6 ? 'text-red-500' : 'text-green-500'
-                                    }`}>
+                                    <th className={`border border-gray-800 px-4 py-2 text-center ${creditA !== 6 ? 'text-red-500' : 'text-green-500'
+                                        }`}>
                                         {creditA}
                                     </th>
                                     <td className="border border-gray-800 px-4 py-2 text-center text-black">หน่วยกิต</td>
@@ -266,9 +264,8 @@ function Mohou() {
                                 <tr>
                                     <td className="border border-gray-800 px-4 py-2 text-center text-black">6</td>
                                     <td className="border border-gray-800 px-4 py-2 text-center text-black">หน่วยกิต</td>
-                                    <th className={`border border-gray-800 px-4 py-2 text-center ${
-                                        creditB !== 6 ? 'text-red-500' : 'text-green-500'
-                                    }`}>
+                                    <th className={`border border-gray-800 px-4 py-2 text-center ${creditB !== 6 ? 'text-red-500' : 'text-green-500'
+                                        }`}>
                                         {creditB}
                                     </th>
                                     <td className="border  border-gray-800 px-4 py-2 text-center text-black">หน่วยกิต</td>
@@ -277,9 +274,8 @@ function Mohou() {
                                 <tr>
                                     <td className="border  border-gray-800 px-4 py-2 text-center text-black">3</td>
                                     <td className="border  border-gray-800 px-4 py-2 text-center text-black">หน่วยกิต</td>
-                                    <th className={`border  border-gray-800 px-4 py-2 text-center ${
-                                        creditC !== 3 ? 'text-red-500' : 'text-green-500'
-                                    }`}>
+                                    <th className={`border  border-gray-800 px-4 py-2 text-center ${creditC !== 3 ? 'text-red-500' : 'text-green-500'
+                                        }`}>
                                         {creditC}
                                     </th>
                                     <td className="border  border-gray-800 px-4 py-2 text-center text-black">หน่วยกิต</td>
@@ -287,9 +283,8 @@ function Mohou() {
                                 <tr>
                                     <td className="border border-gray-800 px-4 py-2 text-center text-black">15</td>
                                     <td className="border border-gray-800 px-4 py-2 text-center text-black">หน่วยกิต</td>
-                                    <th className={`border border-gray-800 px-4 py-2 text-center ${
-                                        totalRemedial !== 15 ? 'text-red-500' : 'text-green-500'
-                                    }`}>
+                                    <th className={`border border-gray-800 px-4 py-2 text-center ${totalRemedial !== 15 ? 'text-red-500' : 'text-green-500'
+                                        }`}>
                                         {totalRemedial}
                                     </th>
                                     <td className="border border-gray-800 px-4 py-2 text-center text-black">หน่วยกิต</td>
@@ -298,20 +293,18 @@ function Mohou() {
                                 <tr>
                                     <td className="border border-gray-800 px-4 py-2 text-center text-black">60</td>
                                     <td className="border border-gray-800 px-4 py-2 text-center text-black">หน่วยกิต</td>
-                                    <th className={`border border-gray-800 px-4 py-2 text-center ${
-                                        (creditD + creditE) !== 60 ? 'text-red-500' : 'text-green-500'
-                                    }`}>
+                                    <th className={`border border-gray-800 px-4 py-2 text-center ${(creditD + creditE) !== 60 ? 'text-red-500' : 'text-green-500'
+                                        }`}>
                                         {creditD + creditE}
                                     </th>
                                     <td className="border border-gray-800 px-4 py-2 text-center text-black">หน่วยกิต</td>
                                 </tr>
-        
+
                                 <tr>
                                     <td className="border  border-gray-800 px-4 py-2 text-center text-black">34</td>
                                     <td className="border  border-gray-800 px-4 py-2 text-center text-black">หน่วยกิต</td>
-                                    <th className={`border  border-gray-800 px-4 py-2 text-center ${
-                                        creditD !== 34 ? 'text-red-500' : 'text-green-500'
-                                    }`}>
+                                    <th className={`border  border-gray-800 px-4 py-2 text-center ${creditD !== 34 ? 'text-red-500' : 'text-green-500'
+                                        }`}>
                                         {creditD}
                                     </th>
                                     <td className="border  border-gray-800 px-4 py-2 text-center text-black">หน่วยกิต</td>
@@ -320,9 +313,8 @@ function Mohou() {
                                 <tr>
                                     <td className="border  border-gray-800 px-4 py-2 text-center text-black">26</td>
                                     <td className="border  border-gray-800 px-4 py-2 text-center text-black">หน่วยกิต</td>
-                                    <th className={`border  border-gray-800 px-4 py-2 text-center ${
-                                        creditE !== 26 ? 'text-red-500' : 'text-green-500'
-                                    }`}>
+                                    <th className={`border  border-gray-800 px-4 py-2 text-center ${creditE !== 26 ? 'text-red-500' : 'text-green-500'
+                                        }`}>
                                         {creditE}
                                     </th>
                                     <td className="border  border-gray-800 px-4 py-2 text-center text-black">หน่วยกิต</td>
@@ -331,25 +323,23 @@ function Mohou() {
                                 <tr>
                                     <td className="border border-gray-800 px-4 py-2 text-center text-black">5</td>
                                     <td className="border border-gray-800 px-4 py-2 text-center text-black">หน่วยกิต</td>
-                                    <th className={`border border-gray-800 px-4 py-2 text-center ${
-                                        creditF !== 5 ? 'text-red-500' : 'text-green-500'
-                                    }`}>
+                                    <th className={`border border-gray-800 px-4 py-2 text-center ${creditF !== 5 ? 'text-red-500' : 'text-green-500'
+                                        }`}>
                                         {creditF}
                                     </th>
                                     <td className="border border-gray-800 px-4 py-2 text-center text-black">หน่วยกิต</td>
                                 </tr>
 
-                                    <tr>
+                                <tr>
                                     <td className="border border-gray-800 px-4 py-2 text-center text-black">95</td>
                                     <td className="border border-gray-800 px-4 py-2 text-center text-black">หน่วยกิต</td>
-                                    <th className={`border border-gray-800 px-4 py-2 text-center ${
-                                    (creditA + creditB + creditC + creditD + creditE + creditF + totalRemedial) !== 95 ? 'text-red-500' : 'text-green-500'
-                                    }`}>
-                                    {creditA + creditB + creditC + creditD + creditE + creditF + totalRemedial}
+                                    <th className={`border border-gray-800 px-4 py-2 text-center ${(creditA + creditB + creditC + creditD + creditE + creditF + totalRemedial) !== 95 ? 'text-red-500' : 'text-green-500'
+                                        }`}>
+                                        {creditA + creditB + creditC + creditD + creditE + creditF + totalRemedial}
                                     </th>
                                     <td className="border border-gray-800 px-4 py-2 text-center text-black">หน่วยกิต</td>
-                                    </tr>
-                                    <tr>
+                                </tr>
+                                <tr>
                                     <td className="border  border-gray-800 px-4 py-2 text-center text-black">36</td>
                                     <td className="border  border-gray-800 px-4 py-2 text-center text-black">ชั่วโมง</td>
                                     <th className="border  border-gray-800 px-4 py-2 text-center text-green-500">

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-import Sidebar from "../components/sidebar";
+import Sidebar from "../components/Sidebar";
 import { useNavigate, useParams } from "react-router-dom"; // ✅ เพิ่ม useParams
 import { Trash2, ArrowLeft } from "lucide-react";
 import Swal from "sweetalert2";
@@ -14,14 +14,14 @@ const Plans = () => {
 
     useEffect(() => {
         if (!infoid) return; // ถ้าไม่มี infoid ให้หยุดโหลดข้อมูล
-    
-        axios.get(`${API_BASE_URL}/server/api/GET/getgroupforplan.php?infoid=${infoid}`)
+
+        axios.get(`${API_BASE_URL}/api/GET/getgroupforplan.php?infoid=${infoid}`)
             .then(response => {
                 if (!Array.isArray(response.data)) {
                     console.error("❌ ข้อมูลที่ได้รับไม่ใช่ Array:", response.data);
                     return;
                 }
-    
+
                 const groupedPlans = response.data.reduce((acc, plan) => {
                     const sublevelDisplay = plan.sublevel ? plan.sublevel : `ภาคเรียนฤดูร้อน ปีการศึกษา ${plan.year}`;
                     const key = `${sublevelDisplay}-${plan.group_name}`;
@@ -29,20 +29,20 @@ const Plans = () => {
                     acc[key].push(plan);
                     return acc;
                 }, {});
-    
+
                 setPlans(groupedPlans);
             })
             .catch(error => console.error("❌ Error fetching study plans:", error));
-    
-       
-            axios.get(`${API_BASE_URL}/server/api/GET/Getcourse.php?infoid=${infoid}`)
+
+
+        axios.get(`${API_BASE_URL}/api/GET/Getcourse.php?infoid=${infoid}`)
             .then(response => {
                 if (!Array.isArray(response.data)) {
                     console.error("❌ ข้อมูลรายวิชาที่ได้รับไม่ใช่ Array:", response.data);
                     return;
                 }
                 console.log("ข้อมูลรายวิชาที่ได้รับ:", response.data);  // ตรวจสอบข้อมูลที่ได้รับ
-    
+
                 // แก้ไขการจัดกลุ่มข้อมูลให้ถูกต้อง
                 const groupedSubjects = response.data.reduce((acc, subject) => {
                     const term = subject.term || "summer";  // กำหนด default เป็น 'summer' หากไม่มี term
@@ -51,14 +51,14 @@ const Plans = () => {
                     acc[subject.infoid][term].push(subject);
                     return acc;
                 }, {});
-    
+
                 console.log("ข้อมูลรายวิชาที่จัดกลุ่มแล้ว:", groupedSubjects); // ตรวจสอบข้อมูลที่จัดกลุ่ม
                 setSubjects(groupedSubjects);
             })
             .catch(error => console.error("❌ Error fetching subjects:", error));
-            
+
     }, [infoid]); // ✅ ใช้ infoid แทน planid
-    
+
     const handleAddSubject = (infoid, planid, term, year) => {
         navigate(`/add-subject?infoid=${infoid}&planid=${planid}&term=${term}&year=${year}`);
     };
@@ -75,28 +75,28 @@ const Plans = () => {
             cancelButtonText: "ยกเลิก",
         }).then((result) => {
             if (result.isConfirmed) {
-                axios.post(`${API_BASE_URL}/server/api/DELETE/Delete_subject.php`, {
+                axios.post(`${API_BASE_URL}/api/DELETE/Delete_subject.php`, {
                     courseid: courseid,
                 })
-                .then(response => {
-                    if (response.data.success) {
-                        Swal.fire("ลบสำเร็จ!", "รายวิชาถูกลบออกแล้ว", "success");
-                        // รีเฟรชข้อมูลรายวิชาโดยกรองออกจาก subjects state
-                        setSubjects(prevSubjects => {
-                            const updatedSubjects = { ...prevSubjects };
-                            if (updatedSubjects[infoid] && updatedSubjects[infoid][term]) {
-                                updatedSubjects[infoid][term] = updatedSubjects[infoid][term].filter(subject => subject.courseid !== courseid);
-                            }
-                            return updatedSubjects;
-                        });
-                    } else {
-                        Swal.fire("ผิดพลาด!", "ไม่สามารถลบรายวิชาได้", "error");
-                    }
-                })
-                .catch(error => {
-                    console.error("❌ Error deleting subject:", error);
-                    Swal.fire("ผิดพลาด!", "เกิดข้อผิดพลาดในการลบรายวิชา", "error");
-                });
+                    .then(response => {
+                        if (response.data.success) {
+                            Swal.fire("ลบสำเร็จ!", "รายวิชาถูกลบออกแล้ว", "success");
+                            // รีเฟรชข้อมูลรายวิชาโดยกรองออกจาก subjects state
+                            setSubjects(prevSubjects => {
+                                const updatedSubjects = { ...prevSubjects };
+                                if (updatedSubjects[infoid] && updatedSubjects[infoid][term]) {
+                                    updatedSubjects[infoid][term] = updatedSubjects[infoid][term].filter(subject => subject.courseid !== courseid);
+                                }
+                                return updatedSubjects;
+                            });
+                        } else {
+                            Swal.fire("ผิดพลาด!", "ไม่สามารถลบรายวิชาได้", "error");
+                        }
+                    })
+                    .catch(error => {
+                        console.error("❌ Error deleting subject:", error);
+                        Swal.fire("ผิดพลาด!", "เกิดข้อผิดพลาดในการลบรายวิชา", "error");
+                    });
             }
         });
     };
@@ -110,8 +110,8 @@ const Plans = () => {
             <Sidebar />
             <div className="ml-64 container mx-auto p-6">
                 {/* ปุ่มย้อนกลับ */}
-                <button 
-                    onClick={handleBack} 
+                <button
+                    onClick={handleBack}
                     className="mb-6 flex items-center gap-2 px-4 py-2 text-white bg-blue-600 hover:bg-blue-700 
                     rounded-lg shadow-md hover:shadow-lg transition-all duration-200 cursor-pointer"
                 >
@@ -119,7 +119,7 @@ const Plans = () => {
                     <span className="font-medium">ย้อนกลับ</span>
                 </button>
                 <h2 className="text-center text-3xl font-bold mb-6">สร้างแผนการเรียน</h2>
-    
+
                 {Object.keys(plans).length > 0 ? (
                     <div className="space-y-8">
                         {Object.keys(plans).map((groupKey) => {
@@ -134,7 +134,7 @@ const Plans = () => {
                                             </>
                                         )}
                                     </h3>
-    
+
                                     {plans[groupKey].map((plan) => {
                                         if (!plan.sublevel) {
                                             // กรณีเป็นภาคเรียนฤดูร้อน: แสดงปุ่มและตารางเพียงตารางเดียว
@@ -163,21 +163,21 @@ const Plans = () => {
                                                                     </tr>
                                                                 </thead>
                                                                 <tbody>
-                                                                {subjects[plan.infoid] && subjects[plan.infoid]["summer"] && subjects[plan.infoid]["summer"].length > 0 ? (
-                                                                    subjects[plan.infoid]["summer"].map((subject) => (
-                                                                        <tr key={subject.subject_id} className="text-center">
-                                                                            <td className="border border-gray-300 p-2 w-[150px]">{subject.course_code}</td>
-                                                                            <td className="border border-gray-300 p-2 w-[300px]">{subject.course_name}</td>
-                                                                            <td className="border border-gray-300 p-2 w-[150px]">{subject.theory}-{subject.comply}-{subject.credit}</td>
-                                                                            <td className="border border-gray-300 p-2 w-[100px] text-center">
-                                                                                <button
-                                                                                    onClick={() => handleDeleteSubject(subject.courseid, plan.infoid, "summer")}
-                                                                                    className="bg-red-500 text-white px-4 py-2 text-sm rounded-lg hover:bg-red-600 cursor-pointer transition duration-300 ease-in-out justify-center"
-                                                                                >
-                                                                                    <Trash2 size={16}/>
-                                                                                </button>
-                                                                            </td>
-                                                                        </tr>
+                                                                    {subjects[plan.infoid] && subjects[plan.infoid]["summer"] && subjects[plan.infoid]["summer"].length > 0 ? (
+                                                                        subjects[plan.infoid]["summer"].map((subject) => (
+                                                                            <tr key={subject.subject_id} className="text-center">
+                                                                                <td className="border border-gray-300 p-2 w-[150px]">{subject.course_code}</td>
+                                                                                <td className="border border-gray-300 p-2 w-[300px]">{subject.course_name}</td>
+                                                                                <td className="border border-gray-300 p-2 w-[150px]">{subject.theory}-{subject.comply}-{subject.credit}</td>
+                                                                                <td className="border border-gray-300 p-2 w-[100px] text-center">
+                                                                                    <button
+                                                                                        onClick={() => handleDeleteSubject(subject.courseid, plan.infoid, "summer")}
+                                                                                        className="bg-red-500 text-white px-4 py-2 text-sm rounded-lg hover:bg-red-600 cursor-pointer transition duration-300 ease-in-out justify-center"
+                                                                                    >
+                                                                                        <Trash2 size={16} />
+                                                                                    </button>
+                                                                                </td>
+                                                                            </tr>
                                                                         ))
                                                                     ) : (
                                                                         <tr>
@@ -193,7 +193,7 @@ const Plans = () => {
                                                 </div>
                                             );
                                         }
-    
+
                                         // กรณีมี sublevel (ภาคเรียนปกติ)
                                         const terms = plan.subterm.split("-").map(term => term.trim());
                                         return (
@@ -205,10 +205,10 @@ const Plans = () => {
                                                     <div className="flex gap-2 items-center">
                                                         <span className="text-lg font-semibold text-gray-700">เพิ่มรายวิชา:</span>
                                                         {terms.map(term => (
-                                                            
+
                                                             <button
                                                                 key={`${plan.infoid}-term-${term}`}
-                                                                onClick={() => handleAddSubject(plan.infoid, plan.planid, term, plan.year,plan.sublevel)}
+                                                                onClick={() => handleAddSubject(plan.infoid, plan.planid, term, plan.year, plan.sublevel)}
                                                                 className="flex items-center gap-2 px-4 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-md hover:shadow-lg transition-all duration-200 cursor-pointer"
                                                             >
                                                                 <span className="font-medium">+ ภาคเรียนที่ {term}</span>
@@ -216,11 +216,11 @@ const Plans = () => {
                                                         ))}
                                                     </div>
                                                 </div>
-    
+
                                                 {terms.map(term => (
                                                     <div key={`${plan.infoid}-${term}`} className="mt-4">
                                                         <p className="text-lg font-semibold text-gray-700 text-left">ภาคเรียนที่ {term}</p>
-    
+
                                                         <div className="w-full overflow-x-auto mt-2">
                                                             <table className="w-full border-collapse border border-gray-300">
                                                                 <thead>
@@ -232,29 +232,29 @@ const Plans = () => {
                                                                     </tr>
                                                                 </thead>
                                                                 <tbody>
-                                                                {subjects[plan.infoid] && subjects[plan.infoid][term] && subjects[plan.infoid][term].length > 0 ? (
-                                                                    subjects[plan.infoid][term].map((subject) => (
-                                                                        <tr key={subject.subject_id} className="text-center">
-                                                                            <td className="border border-gray-300 p-2 w-[150px]">{subject.course_code}</td>
-                                                                            <td className="border border-gray-300 p-2 w-[300px]">{subject.course_name}</td>
-                                                                            <td className="border border-gray-300 p-2 w-[150px]">{subject.theory}-{subject.comply}-{subject.credit}</td>
-                                                                            <td className="border border-gray-300 p-2 w-[100px] text-center">
-                                                                                <button
-                                                                                    onClick={() => handleDeleteSubject(subject.courseid, plan.infoid, term)}
-                                                                                    className="bg-red-500 text-white px-4 py-2 text-sm rounded-lg hover:bg-red-600 cursor-pointer transition duration-300 ease-in-out justify-center"
-                                                                                >
-                                                                                    <Trash2 size={16} />
-                                                                                </button>
+                                                                    {subjects[plan.infoid] && subjects[plan.infoid][term] && subjects[plan.infoid][term].length > 0 ? (
+                                                                        subjects[plan.infoid][term].map((subject) => (
+                                                                            <tr key={subject.subject_id} className="text-center">
+                                                                                <td className="border border-gray-300 p-2 w-[150px]">{subject.course_code}</td>
+                                                                                <td className="border border-gray-300 p-2 w-[300px]">{subject.course_name}</td>
+                                                                                <td className="border border-gray-300 p-2 w-[150px]">{subject.theory}-{subject.comply}-{subject.credit}</td>
+                                                                                <td className="border border-gray-300 p-2 w-[100px] text-center">
+                                                                                    <button
+                                                                                        onClick={() => handleDeleteSubject(subject.courseid, plan.infoid, term)}
+                                                                                        className="bg-red-500 text-white px-4 py-2 text-sm rounded-lg hover:bg-red-600 cursor-pointer transition duration-300 ease-in-out justify-center"
+                                                                                    >
+                                                                                        <Trash2 size={16} />
+                                                                                    </button>
+                                                                                </td>
+                                                                            </tr>
+                                                                        ))
+                                                                    ) : (
+                                                                        <tr>
+                                                                            <td colSpan="4" className="text-center text-gray-500 border border-gray-300 px-4 py-2">
+                                                                                ❌ ไม่พบข้อมูลรายวิชา
                                                                             </td>
                                                                         </tr>
-                                                                    ))
-                                                                ) : (
-                                                                    <tr>
-                                                                        <td colSpan="4" className="text-center text-gray-500 border border-gray-300 px-4 py-2">
-                                                                            ❌ ไม่พบข้อมูลรายวิชา
-                                                                        </td>
-                                                                    </tr>
-                                                                )}
+                                                                    )}
                                                                 </tbody>
                                                             </table>
                                                         </div>

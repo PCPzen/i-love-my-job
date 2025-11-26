@@ -18,7 +18,7 @@ const Addinfo = forwardRef(({ planid, subject_groups, subject_category }, ref) =
   // ฟังก์ชันที่ใช้ดึงข้อมูล
   const fetchFilteredCourses = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/server/api/GET/Courses.php`, {
+      const response = await axios.get(`${API_BASE_URL}/api/GET/Courses.php`, {
         params: {
           planid: planid,
           subject_groups: subject_groups,
@@ -74,13 +74,13 @@ const Addinfo = forwardRef(({ planid, subject_groups, subject_category }, ref) =
       });
       return;
     }
-  
+
     try {
-      const response = await axios.post(`${API_BASE_URL}/server/api/UPDATE/Updatecourse.php`, {
+      const response = await axios.post(`${API_BASE_URL}/api/UPDATE/Updatecourse.php`, {
         subject_id: editingId,
         ...editFormData,
       });
-  
+
       if (response.data.status === "success") {
         Swal.fire({
           icon: 'success',
@@ -109,16 +109,16 @@ const Addinfo = forwardRef(({ planid, subject_groups, subject_category }, ref) =
       });
     }
   };
-  
+
 
   // ยกเลิกการแก้ไข
   const handleCancelEdit = () => {
     setEditingId(null);
   };
-  
+
   const calculateTotalCredits = () => {
     const totals = {};
-  
+
     filteredCourses.forEach(course => {
       const key = `${course.subject_category}-${course.subject_groups}`;
       if (!totals[key]) {
@@ -126,10 +126,10 @@ const Addinfo = forwardRef(({ planid, subject_groups, subject_category }, ref) =
       }
       totals[key].totalCredit += parseFloat(course.credit) || 0;
     });
-  
+
     return Object.values(totals);
   };
-  
+
 
   // ฟังก์ชันสำหรับการลบรายวิชา
   const handleDelete = async (subject_id) => {
@@ -144,7 +144,7 @@ const Addinfo = forwardRef(({ planid, subject_groups, subject_category }, ref) =
 
     if (result.isConfirmed) {
       try {
-        const response = await axios.post(`${API_BASE_URL}/server/api/DELETE/Deletecourses.php`, {
+        const response = await axios.post(`${API_BASE_URL}/api/DELETE/Deletecourses.php`, {
           subject_id: subject_id,
         });
 
@@ -288,7 +288,7 @@ const Addinfo = forwardRef(({ planid, subject_groups, subject_category }, ref) =
                       </button>
                     </div>
                   )}
-                </td>   
+                </td>
               </tr>
             ))
           ) : (

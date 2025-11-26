@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
+import api from "../services/api";
 import Swal from "sweetalert2";
 import Logo from "../img/logo.png";
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 const LoginPage = () => {
   const [username, setUsername] = useState("");
@@ -17,41 +15,22 @@ const LoginPage = () => {
     const savedRememberMe = localStorage.getItem("rememberMe") === "true";
     if (savedRememberMe) {
       const savedUsername = localStorage.getItem("savedUsername");
-      const savedPassword = localStorage.getItem("savedPassword");
-      if (savedUsername && savedPassword) {
+      if (savedUsername) {
         setUsername(savedUsername);
-        setPassword(savedPassword);
         setRememberMe(true);
-        handleAutoLogin(savedUsername, savedPassword);
       }
     } else {
       // ลบข้อมูลเก่าที่อาจถูกเก็บไว้
       localStorage.removeItem("savedUsername");
-      localStorage.removeItem("savedPassword");
     }
+    // Security: ไม่เก็บและไม่โหลด password จาก localStorage
+    localStorage.removeItem("savedPassword");
   }, []);
-  
-  
-  const handleAutoLogin = async (savedUsername, savedPassword) => {
-    try {
-      const response = await axios.post(`${API_BASE_URL}/server/api/POST/login.php`, {
-        username: savedUsername,
-        password: savedPassword,
-      });
-
-      if (response.data.success) {
-        localStorage.setItem("token", response.data.token);
-        navigate("/Createstudyplan");
-      }
-    } catch (err) {
-      console.error("Auto Login Error:", err);
-    }
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const response = await axios.post(`${API_BASE_URL}/server/api/POST/login.php`, {
+      const response = await api.post(`/api/POST/login.php`, {
         username,
         password,
       });
@@ -69,14 +48,11 @@ const LoginPage = () => {
 
         if (rememberMe) {
           localStorage.setItem("savedUsername", username);
-          localStorage.setItem("savedPassword", password);
-          localStorage.setItem("rememberMe", "true"); // บันทึก flag ว่าผู้ใช้เลือกจดจำฉัน
+          localStorage.setItem("rememberMe", "true");
         } else {
           localStorage.removeItem("savedUsername");
-          localStorage.removeItem("savedPassword");
           localStorage.removeItem("rememberMe");
-        }        
-        
+        }
 
         setTimeout(() => navigate("/Createstudyplan"), 1500);
       } else {
@@ -111,7 +87,7 @@ const LoginPage = () => {
 
     if (formValues) {
       try {
-        const response = await axios.post(`${API_BASE_URL}/server/api/POST/reset_password.php`, {
+        const response = await api.post(`/api/POST/reset_password.php`, {
           username: formValues.username,
           newPassword: formValues.newPassword,
         });
@@ -180,7 +156,7 @@ const LoginPage = () => {
         </form>
       </div>
     </div>
-    
+
   );
 };
 

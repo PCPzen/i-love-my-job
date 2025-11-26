@@ -8,7 +8,7 @@ function Tableinfo({ planid, subject_groups, subject_category }) {
   useEffect(() => {
     const fetchFilteredCourses = async () => {
       try {
-        const response = await axios.get(`${API_BASE_URL}/server/api/GET/Courses.php`, {
+        const response = await axios.get(`${API_BASE_URL}/api/GET/Courses.php`, {
           params: {
             planid: planid,
             subject_groups: subject_groups,

@@ -5,7 +5,10 @@ import axios from "axios";
 // Define API base URLs (adjust if needed)
 // Ensure VITE_API_BASE_URL is correctly set in your .env files
 // Default fallback points to this project served by XAMPP
-const API_GET_BASE = (import.meta.env.VITE_API_BASE_URL || 'http://localhost/lastone-main') + "/server/api/GET";
+const RAW_BASE =
+  import.meta.env.VITE_API_BASE_URL ||
+  "http://localhost/I-LOVE-MY-JOB-MAIN/server";
+  const API_GET_BASE = RAW_BASE.replace(/\/+$/, "") + "/api/GET";
 
 export default function TalangPlan() {
 	// State variables

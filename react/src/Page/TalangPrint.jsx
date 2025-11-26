@@ -3,7 +3,7 @@ import axios from 'axios';
 import Sidebar from '../components/Sidebar';
 
 // ตรวจสอบให้แน่ใจว่า API URL ถูกต้อง
-const API = import.meta.env.VITE_API_URL || 'http://localhost/CPSS/server/api';
+const API = (import.meta.env.VITE_API_BASE_URL || 'http://localhost/i-love-my-job-main/server') + '/api';
 
 // ฟังก์ชันสำหรับจัดรูปแบบข้อมูลที่ได้จาก API ให้อยู่ในรูปตาราง
 const formatScheduleData = (data, timeslots) => {
@@ -28,7 +28,7 @@ const formatScheduleData = (data, timeslots) => {
 
 export default function TalangPrint() {
   const [loading, setLoading] = useState(false);
-  
+
   // State สำหรับเก็บข้อมูลใน Dropdown
   const [plans, setPlans] = useState([]); // แผนก (study_plans)
   const [levels, setLevels] = useState([]); // ระดับชั้น (sublevel)
@@ -56,14 +56,14 @@ export default function TalangPrint() {
           axios.get(`${API}/GET/get_timeslots.php`) // (ต้องสร้าง API นี้)
         ]);
         setPlans(planRes.data || []);
-        
+
         // แปลงเวลาเป็น Int เพื่อเทียบกับ DB
         const slotsWithIntTime = timeRes.data.map(slot => ({
           ...slot,
           start_time_int: parseInt(slot.start_time.replace(':', ''), 10)
         }));
         setTimeslots(slotsWithIntTime || []);
-        
+
       } catch (e) {
         console.error("Failed to fetch initial data", e);
       }
@@ -131,9 +131,9 @@ export default function TalangPrint() {
         setLoading(false);
         return;
       }
-      
+
       const res = await axios.get(`${API}/GET/GetPrintSchedule.php?infoid=${infoid}&term=${term}&year=${year}`);
-      
+
       if (res.data.status === 'error') {
         alert(res.data.message);
         setScheduleData({});
@@ -155,24 +155,24 @@ export default function TalangPrint() {
   const handlePrint = () => {
     window.print();
   };
-  
+
   const days = ["จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์", "อาทิตย์"];
 
   return (
     <div className="min-h-screen flex bg-gray-50">
       <Sidebar />
       <main className="flex-1 lg:ml-64 p-6 print-content">
-        
+
         {/* ส่วนที่ 1: ตัวเลือก (จะถูกซ่อนตอนพิมพ์) */}
         <div className="w-full max-w-6xl mx-auto p-4 bg-white rounded-lg shadow no-print">
           <h1 className="text-2xl font-semibold text-[#3E3269] mb-4">พิมพ์ตารางเรียน</h1>
           <form onSubmit={handleSearch} className="grid grid-cols-1 md:grid-cols-6 gap-3">
-            
+
             <select name="planid" value={selected.planid} onChange={handleChange} className="border p-2 rounded md:col-span-2">
               <option value="">-- เลือกแผนก --</option>
               {plans.map(p => <option key={p.planid} value={p.planid}>{p.course} {p.year}</option>)}
             </select>
-            
+
             <select name="sublevel" value={selected.sublevel} onChange={handleChange} className="border p-2 rounded" disabled={!selected.planid}>
               <option value="">-- เลือกระดับชั้น --</option>
               {levels.map(l => <option key={l.sublevel} value={l.sublevel}>{l.sublevel}</option>)}
@@ -202,7 +202,7 @@ export default function TalangPrint() {
             <h2 className="text-xl font-bold">ตารางเรียน</h2>
             {/* คุณสามารถเพิ่ม Header ที่นี่ (เช่น ชื่อแผนก, กลุ่ม, ปีการศึกษา) */}
           </div>
-          
+
           <table className="min-w-full border-collapse border border-gray-400">
             <thead>
               <tr className="bg-gray-200">
@@ -218,7 +218,7 @@ export default function TalangPrint() {
                 <tr key={slot.id}>
                   <td className="border border-gray-300 p-2 text-center">{index + 1}</td>
                   <td className="border border-gray-300 p-2 text-center text-sm">{slot.start_time}-{slot.end_time}</td>
-                  
+
                   {days.map(day => {
                     const item = scheduleData[slot.id] ? scheduleData[slot.id][day] : null;
                     return (

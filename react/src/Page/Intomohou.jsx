@@ -12,7 +12,7 @@ const StudyPlans = () => {
     const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
     useEffect(() => {
-        axios.get(`${API_BASE_URL}/server/api/GET/Getstudyplan.php`)
+        axios.get(`${API_BASE_URL}/api/GET/Getstudyplan.php`)
             .then(response => {
                 // เรียงลำดับข้อมูลก่อนแสดงผล
                 const sortedPlans = response.data.sort((a, b) => {
@@ -38,7 +38,7 @@ const StudyPlans = () => {
                 <h2 className="text-center text-3xl font-bold mb-6">โครงสร้างแผนการเรียน </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {plans.map(plan => (
-                        <div key={plan.planid} 
+                        <div key={plan.planid}
                             className="bg-white shadow-lg p-6 rounded-xl cursor-pointer hover:bg-blue-200 transition-all"
                             onClick={() => navigate(`/Redirectmohou/${plan.planid}?course=${encodeURIComponent(plan.course)}&year=${plan.year}&student_id=${plan.student_id}`, { state: plan })}>
                             <h3 className="text-xl font-semibold text-blue-600 mb-2">{plan.course}</h3>

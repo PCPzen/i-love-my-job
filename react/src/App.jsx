@@ -1,10 +1,10 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 
 // Pages (ชื่อไฟล์ต้องตรง / default export ต้องมี)
-import TalangStudy from "./Page/talangstudy";
+import TalangStudy from "./Page/Talangstudy"; // แก้ path ให้ตรง case sensitive (ถ้าไฟล์จริงชื่อ Talangstudy.jsx)
 import TalangPrint from "./Page/TalangPrint";
-import Teacheradd from "./Page/Teacheradd";   // default export: TalangStudy
-import TalangPlan from "./Page/talangplan";     // default export: TalangPlan
+import Teacheradd from "./Page/Teacheradd";
+import TalangPlan from "./Page/Talangplan";
 import LoginPage from "./Page/LoginPage";
 import Createstudyplan from "./Page/Createstudyplan";
 import Groupinfo from "./Page/Groupinfo";
@@ -20,6 +20,9 @@ import Courseadd from "./Page/Courseadd";
 import Redirectmohou from "./Page/Redirectmohou";
 import Intomohou from "./Page/Intomohou";
 
+// *** เพิ่มบรรทัดนี้ เพื่อแก้ Error ReferenceError ***
+import Studentroomadd from "./Page/Studentroomadd"; 
+
 export default function App() {
   return (
     <Routes>
@@ -27,6 +30,7 @@ export default function App() {
       <Route path="/" element={<Navigate to="/courseinfo" replace />} />
 
       {/* ใช้ path เป็นตัวพิมพ์เล็กทั้งหมด */}
+      <Route path="/studentroomadd" element={<Studentroomadd />} />
       <Route path="/talangprint" element={<TalangPrint />} />
       <Route path="/teacheradd" element={<Teacheradd />} />
       <Route path="/loginpage" element={<LoginPage />} />

@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, ArrowUp } from "lucide-react";
-import axios from "axios";
-import Sidebar from "../components/sidebar";
+import api from "../services/api";
+import Sidebar from "../components/Sidebar";
 import CourseTable from "../components/Tableinfo";
 import Swal from "sweetalert2";
 
@@ -16,11 +16,10 @@ function Courseinfo() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [refreshKey, setRefreshKey] = useState(Date.now());
-  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
   // 📌 ฟังก์ชันสำหรับดึงข้อมูลหลักสูตร
   const fetchCourseInfo = () => {
-    axios.get(`${API_BASE_URL}/server/api/GET/Getstudyplan.php?planid=${planid}`)
+    api.get(`/api/GET/Getstudyplan.php?planid=${planid}`)
       .then((response) => {
         const foundPlan = response.data.find((plan) => plan.planid === parseInt(planid));
         if (foundPlan) {
@@ -40,26 +39,26 @@ function Courseinfo() {
   }, [planid]);
 
 
-// ดึงข้อมูลแผนการเรียนของปีที่แล้ว
-useEffect(() => {
-  if (year) {
-    const previousYear = parseInt(year) - 1;
-    axios.get(`${API_BASE_URL}/server/api/GET/Getstudyplan.php?year=${previousYear}`)
-      .then((response) => {
-        const foundPrevPlan = response.data.find((plan) => Number(plan.year) === previousYear);
-        if (foundPrevPlan) {
-          setPreviousPlanid(foundPrevPlan.planid);
-          setPreviousCourse(foundPrevPlan.course.trim()); // บันทึกหลักสูตรของปีที่แล้ว
-        } else {
-          setPreviousPlanid(null);
-          setPreviousCourse(null);
-        }
-      })
-      .catch((error) => {
-        console.error("Error fetching previous year plan:", error);
-      });
-  }
-}, [year]);
+  // ดึงข้อมูลแผนการเรียนของปีที่แล้ว
+  useEffect(() => {
+    if (year) {
+      const previousYear = parseInt(year) - 1;
+      api.get(`/api/GET/Getstudyplan.php?year=${previousYear}`)
+        .then((response) => {
+          const foundPrevPlan = response.data.find((plan) => Number(plan.year) === previousYear);
+          if (foundPrevPlan) {
+            setPreviousPlanid(foundPrevPlan.planid);
+            setPreviousCourse(foundPrevPlan.course.trim()); // บันทึกหลักสูตรของปีที่แล้ว
+          } else {
+            setPreviousPlanid(null);
+            setPreviousCourse(null);
+          }
+        })
+        .catch((error) => {
+          console.error("Error fetching previous year plan:", error);
+        });
+    }
+  }, [year]);
 
   const handleBack = () => {
     navigate(-1);
@@ -70,10 +69,10 @@ useEffect(() => {
       Swal.fire("แจ้งเตือน", "ไม่พบข้อมูลปีที่แล้ว", "warning");
       return;
     }
-  
+
     setIsProcessing(true);
-  
-    axios.post(`${API_BASE_URL}/server/api/POST/CopyPreviousCourse.php`, {
+
+    api.post(`/api/POST/CopyPreviousCourse.php`, {
       currentPlanid: planid
     })
       .then((response) => {
@@ -98,23 +97,23 @@ useEffect(() => {
     <div className="flex min-h-screen">
       <Sidebar />
       <div className="ml-65 container mx-auto p-4">
-      <div className="flex justify-between items-center mb-6">
-      <button onClick={handleBack} className="flex items-center gap-2 px-4 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-md hover:shadow-lg transition-all duration-200 cursor-pointer">
-        <ArrowLeft size={20} />
-        <span className="font-medium">ย้อนกลับ</span>
-      </button>
-      {previousPlanid && course && previousCourse &&
-        (course.toLowerCase().includes(previousCourse.toLowerCase()) ||
-        previousCourse.toLowerCase().includes(course.toLowerCase())) && (
-          <button
-            onClick={() => setShowConfirm(true)}
-            className="flex items-center gap-2 px-4 py-2 text-white bg-green-600 hover:bg-green-700 text-lg rounded-md"
-          >
-            <ArrowUp size={20} />
-            ใช้ข้อมูลจากปีที่แล้ว
+        <div className="flex justify-between items-center mb-6">
+          <button onClick={handleBack} className="flex items-center gap-2 px-4 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-md hover:shadow-lg transition-all duration-200 cursor-pointer">
+            <ArrowLeft size={20} />
+            <span className="font-medium">ย้อนกลับ</span>
           </button>
-      )}
-    </div>
+          {previousPlanid && course && previousCourse &&
+            (course.toLowerCase().includes(previousCourse.toLowerCase()) ||
+              previousCourse.toLowerCase().includes(course.toLowerCase())) && (
+              <button
+                onClick={() => setShowConfirm(true)}
+                className="flex items-center gap-2 px-4 py-2 text-white bg-green-600 hover:bg-green-700 text-lg rounded-md"
+              >
+                <ArrowUp size={20} />
+                ใช้ข้อมูลจากปีที่แล้ว
+              </button>
+            )}
+        </div>
 
 
         {showConfirm && (
@@ -153,7 +152,7 @@ useEffect(() => {
             เพิ่มข้อมูลรายวิชา
           </Link>
         </div>
-           <CourseTable  key={refreshKey + "_group1"}  planid={planid} subject_groups={"1.1 กลุ่มสมรรถนะภาษาและการสื่อสาร"} subject_category={"1.หมวดวิชาสมรรถนะแกนกลาง"} />
+        <CourseTable key={refreshKey + "_group1"} planid={planid} subject_groups={"1.1 กลุ่มสมรรถนะภาษาและการสื่อสาร"} subject_category={"1.หมวดวิชาสมรรถนะแกนกลาง"} />
 
         <div className='ml-10'>
           <br />
@@ -165,7 +164,7 @@ useEffect(() => {
             เพิ่มข้อมูลรายวิชา
           </Link>
         </div>
-        <CourseTable key={refreshKey + "_group2"}  planid={planid} subject_groups={"1.2 กลุ่มสมรรถนะการคิดและการแก้ปัญหา"}  subject_category={"1.หมวดวิชาสมรรถนะแกนกลาง"}/>
+        <CourseTable key={refreshKey + "_group2"} planid={planid} subject_groups={"1.2 กลุ่มสมรรถนะการคิดและการแก้ปัญหา"} subject_category={"1.หมวดวิชาสมรรถนะแกนกลาง"} />
 
         <div className='ml-10'>
           <br />
@@ -177,20 +176,20 @@ useEffect(() => {
             เพิ่มข้อมูลรายวิชา
           </Link>
         </div>
-        <CourseTable key={refreshKey + "_group3"} planid={planid} subject_groups={"1.3 กลุ่มสมรรถนะสังคมและการดำรงชีวิต"}  subject_category={"1.หมวดวิชาสมรรถนะแกนกลาง"}/>
-         
+        <CourseTable key={refreshKey + "_group3"} planid={planid} subject_groups={"1.3 กลุ่มสมรรถนะสังคมและการดำรงชีวิต"} subject_category={"1.หมวดวิชาสมรรถนะแกนกลาง"} />
+
         {course === "หลักสูตรประกาศณียบัตรวิชาชีพขั้นสูง (ม.6)" && (
-        <div className="mt-5">
-          <span className="text-lg ml-5 font-bold">รายวิชาปรับพื้นฐาน</span>
-          <Link
-            to={`/courseadd?category=${encodeURIComponent("รายวิชาปรับพื้นฐาน")}&subcategory=${encodeURIComponent("")}&planid=${planid}`}
-            className="ml-5 text-blue-500 text-lg"
-          >
-            เพิ่มข้อมูลรายวิชา
-          </Link>
-          <CourseTable key={refreshKey + "_group4"} planid={planid} subject_groups={""} subject_category={"รายวิชาปรับพื้นฐาน"} />
-        </div>
-      )}
+          <div className="mt-5">
+            <span className="text-lg ml-5 font-bold">รายวิชาปรับพื้นฐาน</span>
+            <Link
+              to={`/courseadd?category=${encodeURIComponent("รายวิชาปรับพื้นฐาน")}&subcategory=${encodeURIComponent("")}&planid=${planid}`}
+              className="ml-5 text-blue-500 text-lg"
+            >
+              เพิ่มข้อมูลรายวิชา
+            </Link>
+            <CourseTable key={refreshKey + "_group4"} planid={planid} subject_groups={""} subject_category={"รายวิชาปรับพื้นฐาน"} />
+          </div>
+        )}
 
 
         <div className='mt-5'>
@@ -205,7 +204,7 @@ useEffect(() => {
               เพิ่มข้อมูลรายวิชา
             </Link>
           </div>
-          <CourseTable key={refreshKey + "_group5"}planid={planid} subject_groups={"2.1 กลุ่มสมรรถนะวิชาชีพพื้นฐาน"}  subject_category={"2.หมวดวิชาสมรรถนะวิชาชีพ"}/>
+          <CourseTable key={refreshKey + "_group5"} planid={planid} subject_groups={"2.1 กลุ่มสมรรถนะวิชาชีพพื้นฐาน"} subject_category={"2.หมวดวิชาสมรรถนะวิชาชีพ"} />
 
           <div className='ml-10'>
             <br />
@@ -217,7 +216,7 @@ useEffect(() => {
               เพิ่มข้อมูลรายวิชา
             </Link>
           </div>
-          <CourseTable key={refreshKey + "_group6"} planid={planid} subject_groups={"2.2 กลุ่มสมรรถนะวิชาชีพเฉพาะ"}  subject_category={"2.หมวดวิชาสมรรถนะวิชาชีพ"}/>
+          <CourseTable key={refreshKey + "_group6"} planid={planid} subject_groups={"2.2 กลุ่มสมรรถนะวิชาชีพเฉพาะ"} subject_category={"2.หมวดวิชาสมรรถนะวิชาชีพ"} />
         </div>
 
         <div className='mt-5'>
@@ -243,7 +242,7 @@ useEffect(() => {
         </div>
 
       </div>
-      </div>
+    </div>
   );
 }
 

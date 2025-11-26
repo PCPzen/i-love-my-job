@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from "react-router-dom";
-import Sidebar from '../components/sidebar';
+import Sidebar from '../components/Sidebar';
 import Addinfo from '../components/Addinfo';
 import axios from 'axios';
 import Swal from 'sweetalert2';
@@ -41,7 +41,7 @@ function Courseadd() {
 
   // ดึงข้อมูลจาก API เมื่อหน้าโหลด
   const handleAddCourse = async () => {
-    
+
     if (!course_code || !course_name || !theory || !comply || !credit) {
       Swal.fire({
         icon: 'warning',
@@ -61,11 +61,11 @@ function Courseadd() {
       subject_groups: subcategory,
       planid: planid,
     };
-  
+
     try {
-      const response = await axios.post(`${API_BASE_URL}/server/api/POST/Courseadd.php`, newCourse);
+      const response = await axios.post(`${API_BASE_URL}/api/POST/Courseadd.php`, newCourse);
       console.log('คำตอบจาก API:', response); // ตรวจสอบคำตอบจาก API
-  
+
       // ตรวจสอบสถานะและข้อมูลที่ส่งกลับมา
       if (response.status === 201 || response.status === 200) {
         setCourses([...courses, newCourse]);
@@ -78,9 +78,9 @@ function Courseadd() {
           icon: 'success',
           title: 'บันทึกสำเร็จ',
           text: 'รายวิชาถูกเพิ่มเรียบร้อยแล้ว',
-      }).then(() => {
-        addinforef.current.fetchFilteredCourses();
-      });
+        }).then(() => {
+          addinforef.current.fetchFilteredCourses();
+        });
 
       } else {
         Swal.fire({
@@ -101,7 +101,7 @@ function Courseadd() {
 
   const handleBack = () => {
     navigate(-1);
-};
+  };
   return (
     <div className='flex min-h-screen'>
       <Sidebar />
@@ -140,7 +140,7 @@ function Courseadd() {
                 id="theory"
                 value={theory}
                 onChange={(e) => {
-                  const value = e.target.value.replace(/[^0-9]/g, '').slice(0, 1); 
+                  const value = e.target.value.replace(/[^0-9]/g, '').slice(0, 1);
                   settheory(value);
                 }}
                 className='border-2 border-gray-700 rounded-lg p-2 flex-1'
@@ -153,10 +153,10 @@ function Courseadd() {
                 type="number"
                 id="comply"
                 value={comply}
-                  onChange={(e) => {
-                    const value = e.target.value.replace(/[^0-9]/g, '').slice(0, 1);
-                    setcomply(value);
-                  }}
+                onChange={(e) => {
+                  const value = e.target.value.replace(/[^0-9]/g, '').slice(0, 1);
+                  setcomply(value);
+                }}
                 className='border-2 border-gray-700 rounded-lg p-2 flex-1 ml-1'
                 min="0"
                 max="9"

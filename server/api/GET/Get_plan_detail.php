@@ -1,5 +1,6 @@
 <?php
 require("../conn.php");
+
 header("Content-Type: application/json; charset=UTF-8");
 
 if (!isset($_GET['planid']) || empty($_GET['planid'])) {

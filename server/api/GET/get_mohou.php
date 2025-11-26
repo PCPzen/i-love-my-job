@@ -1,5 +1,6 @@
 <?php
 require("../conn.php");
+
 header("Content-Type: application/json; charset=UTF-8");
 
 // ตรวจสอบว่ามีการส่งค่า planid มาหรือไม่
