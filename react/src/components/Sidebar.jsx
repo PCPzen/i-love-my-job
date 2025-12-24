@@ -83,7 +83,7 @@ function Sidebar() {
                 isActive(["/createstudyplan", "/courseinfo", "/courseadd"])
                   ? linkActiveClasses
                   : linkInactiveClasses
-              }`}
+                }`}
             >
               <LucideIcons.BookOpen className="w-5 h-5 mr-2" />
               ข้อมูลหลักสูตร
@@ -98,7 +98,7 @@ function Sidebar() {
                 isActive(["/intomohou", "/redirectmohou"])
                   ? linkActiveClasses
                   : linkInactiveClasses
-              }`}
+                }`}
             >
               <LucideIcons.LayoutDashboard className="w-5 h-5 mr-2" />
               ดูโครงสร้างแผน
@@ -113,7 +113,7 @@ function Sidebar() {
                 isActive(["/intogroupinfo", "/groupinfo"])
                   ? linkActiveClasses
                   : linkInactiveClasses
-              }`}
+                }`}
             >
               <LucideIcons.Users className="w-5 h-5 mr-2" />
               ข้อมูลกลุ่มเรียน
@@ -128,7 +128,7 @@ function Sidebar() {
                 isActive(["/intoplan", "/plan", "/add-subject"])
                   ? linkActiveClasses
                   : linkInactiveClasses
-              }`}
+                }`}
             >
               <LucideIcons.FilePlus className="w-5 h-5 mr-2" />
               สร้างแผนการเรียน
@@ -143,7 +143,7 @@ function Sidebar() {
                 isActive(["/intoprintplan", "/printplan"])
                   ? linkActiveClasses
                   : linkInactiveClasses
-              }`}
+                }`}
             >
               <LucideIcons.Printer className="w-5 h-5 mr-2" />
               พิมพ์แผนการเรียน
@@ -159,14 +159,13 @@ function Sidebar() {
         </span>
         <ul className="flex flex-col space-y-1 flex-grow"> {/* ลด space-y */}
           {/* (ย้ายมา) เพิ่มหมวดหมู่ */}
-   
+
           {/* (ย้ายมา) เพิ่มครูผู้สอน */}
           <li>
             <Link
               to="/Teacheradd" // ! (เปลี่ยน Path ตรงนี้ตาม Route ของคุณ)
-              className={`${linkBaseClasses} ${
-                isActive("/Teacheradd") ? linkActiveClasses : linkInactiveClasses
-              }`}
+              className={`${linkBaseClasses} ${isActive("/Teacheradd") ? linkActiveClasses : linkInactiveClasses
+                }`}
             >
               <LucideIcons.UserPlus className="w-5 h-5 mr-2" />
               เพิ่มครูผู้สอน
@@ -176,9 +175,8 @@ function Sidebar() {
           <li>
             <Link
               to="/Studentroomadd" // ! (เปลี่ยน Path ตรงนี้ตาม Route ของคุณ)
-              className={`${linkBaseClasses} ${
-                isActive("/Studentroomadd") ? linkActiveClasses : linkInactiveClasses
-              }`}
+              className={`${linkBaseClasses} ${isActive("/Studentroomadd") ? linkActiveClasses : linkInactiveClasses
+                }`}
             >
               <LucideIcons.Building2 className="w-5 h-5 mr-2" />
               เพิ่มห้องเรียน
@@ -189,9 +187,8 @@ function Sidebar() {
           <li>
             <Link
               to="/talangplan" // Path สำหรับดูข้อมูลตารางเรียน
-              className={`${linkBaseClasses} ${
-                isActive("/talangplan") ? linkActiveClasses : linkInactiveClasses
-              }`}
+              className={`${linkBaseClasses} ${isActive("/talangplan") ? linkActiveClasses : linkInactiveClasses
+                }`}
             >
               <LucideIcons.Database className="w-5 h-5 mr-2" />
               ข้อมูลตารางเรียน
@@ -201,12 +198,22 @@ function Sidebar() {
           <li>
             <Link
               to="/talangstudy" // Path สำหรับสร้างตารางเรียน
-              className={`${linkBaseClasses} ${
-                isActive("/talangstudy") ? linkActiveClasses : linkInactiveClasses
-              }`}
+              className={`${linkBaseClasses} ${isActive("/talangstudy") ? linkActiveClasses : linkInactiveClasses
+                }`}
             >
               <LucideIcons.CalendarPlus className="w-5 h-5 mr-2" />
               จัดตารางเรียนใหม่
+            </Link>
+          </li>
+          {/* พิมพ์ตารางเรียน */}
+          <li>
+            <Link
+              to="/talangprint"
+              className={`${linkBaseClasses} ${isActive("/talangprint") ? linkActiveClasses : linkInactiveClasses
+                }`}
+            >
+              <LucideIcons.Printer className="w-5 h-5 mr-2" />
+              พิมพ์ตารางเรียน
             </Link>
           </li>
           {/* สามารถเพิ่มเมนู "ดูตารางเรียนทั้งหมด" ตรงนี้ได้ */}

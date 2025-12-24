@@ -15,7 +15,7 @@ function Studentroomadd() {
   const [formData, setFormData] = useState({
     room_name: "",
 
-    room_type: "Lecture",
+    room_type: "ห้องทฤษฎี",
   });
 
   const [rooms, setRooms] = useState([]);
@@ -69,7 +69,7 @@ function Studentroomadd() {
     setFormData({
       room_name: "",
 
-      room_type: "Lecture",
+      room_type: "ห้องทฤษฎี",
     });
     setEditingRoomId(null);
   };
@@ -118,7 +118,7 @@ function Studentroomadd() {
     setFormData({
       room_name: room.room_name || "",
 
-      room_type: room.room_type || "Lecture",
+      room_type: room.room_type || "ห้องทฤษฎี",
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -174,8 +174,8 @@ function Studentroomadd() {
             {message && (
               <div
                 className={`mb-4 p-3 rounded-md text-sm ${message.type === "success"
-                    ? "bg-green-100 text-green-800"
-                    : "bg-red-100 text-red-800"
+                  ? "bg-green-100 text-green-800"
+                  : "bg-red-100 text-red-800"
                   }`}
               >
                 {message.text}
@@ -218,10 +218,8 @@ function Studentroomadd() {
                     onChange={handleChange}
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                   >
-                    <option value="Lecture">ห้องบรรยาย (Lecture)</option>
-                    <option value="Lab">ห้องปฏิบัติการ (Lab)</option>
-                    <option value="Meeting">ห้องประชุม</option>
-                    <option value="Other">อื่นๆ</option>
+                    <option value="ห้องทฤษฎี">ห้องทฤษฎี</option>
+                    <option value="ห้องปฏิบัติ">ห้องปฏิบัติ</option>
                   </select>
                 </div>
               </div>

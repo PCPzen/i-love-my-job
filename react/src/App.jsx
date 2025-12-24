@@ -21,7 +21,7 @@ import Redirectmohou from "./Page/Redirectmohou";
 import Intomohou from "./Page/Intomohou";
 
 // *** เพิ่มบรรทัดนี้ เพื่อแก้ Error ReferenceError ***
-import Studentroomadd from "./Page/Studentroomadd"; 
+import Studentroomadd from "./Page/Studentroomadd";
 
 export default function App() {
   return (
@@ -54,7 +54,7 @@ export default function App() {
       <Route path="/talangplan" element={<TalangPlan />} />
 
       {/* 404 */}
-      <Route path="*" element={<h1 style={{textAlign:"center",marginTop:50}}>404 - ไม่พบหน้า</h1>} />
+      <Route path="*" element={<h1 style={{ textAlign: "center", marginTop: 50 }}>404 - ไม่พบหน้า</h1>} />
     </Routes>
   );
 }
