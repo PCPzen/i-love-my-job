@@ -1,20 +1,21 @@
+# I-LOVE-MY-JOB-MAIN/server/api/.htaccess
+
+# --- CORS สำหรับทุก endpoint ในโฟลเดอร์นี้ ---
+<IfModule mod_headers.c>
+    Header always set Access-Control-Allow-Origin "*"
+    Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+    Header always set Access-Control-Allow-Headers "Content-Type, Authorization, Origin, X-Requested-With, Accept"
+    Header always set Access-Control-Expose-Headers "Content-Type, Content-Length"
+</IfModule>
+
+# --- ตอบ preflight OPTIONS ทันที (ไม่วิ่งเข้า PHP) ---
 <IfModule mod_rewrite.c>
     RewriteEngine On
-    RewriteBase /i-love-my-job-main/server/api/
-
-    # Handle Authorization Header
-    RewriteCond %{HTTP:Authorization} .
-    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
-
-    # Handle Preflight OPTIONS requests (Optional if handled by PHP, but good to have)
-    RewriteCond %{REQUEST_METHOD} OPTIONS
-    RewriteRule ^(.*)$ $1 [R=200,L]
+    # ถ้าเป็น OPTIONS ให้ส่ง 204 เลย
+    RewriteCond %{REQUEST_METHOD} =OPTIONS
+    RewriteRule ^ - [R=204,L]
 </IfModule>
 
-<IfModule mod_headers.c>
-    # Force overwrite of CORS headers to prevent duplicates
-    Header always set Access-Control-Allow-Origin "http://localhost:5173"
-    Header always set Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS"
-    Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With"
-    Header always set Access-Control-Allow-Credentials "false"
-</IfModule>
+# (ไม่จำเป็น) ถ้าอยากเข้าถึงไฟล์ .php ได้โดยไม่ใส่ .php ให้เปิดบรรทัดข้างล่าง
+#RewriteCond %{REQUEST_FILENAME} !-f
+#RewriteRule ^(.+)$ $1.php [L]

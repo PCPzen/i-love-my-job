@@ -99,8 +99,8 @@ function Createstudyplan() {
       const list = Array.isArray(response.data)
         ? response.data
         : Array.isArray(response.data?.data)
-        ? response.data.data
-        : []
+          ? response.data.data
+          : []
 
       setPlans(list)
     } catch (error) {
@@ -136,14 +136,12 @@ function Createstudyplan() {
     }).then(async (result) => {
       if (result.isConfirmed) {
         try {
-          const formData = new FormData()
-          formData.append('_method', 'DELETE')
-          formData.append('planid', planId)
-
-          const response = await axios.post(
+          const response = await axios.delete(
             apiUrl('api/DELETE/Deletestudyplan.php'),
-            formData,
-            { headers: { 'Content-Type': 'multipart/form-data' } }
+            {
+              headers: { 'Content-Type': 'application/json' },
+              data: { planid: planId }
+            }
           )
 
           if (response?.data?.status === 'success') {

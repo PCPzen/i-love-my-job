@@ -1,11 +1,6 @@
 import React, { useState, useEffect } from "react";
 import Sidebar from "../components/Sidebar";
-import axios from "axios";
-
-// API Base configuration
-const RAW_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost/I-LOVE-MY-JOB-MAIN/server";
-const API_BASE = RAW_BASE.replace(/\/+$/, "");
-const api = axios.create({ baseURL: API_BASE });
+import { getTeachers, getRooms, getGroupInformation, getCourseInfo } from "../services/getService";
 
 // วันหลัก
 const DAYS = ["จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์"];
@@ -54,6 +49,7 @@ export default function ScheduleCreate() {
             studentCount: "",
             term: "2",
             year: "2568",
+            infoid: "", // Add infoid
         })
     );
 
@@ -66,29 +62,28 @@ export default function ScheduleCreate() {
     const [teacherList, setTeacherList] = useState([]);
     const [roomList, setRoomList] = useState([]);
     const [studyPlans, setStudyPlans] = useState([]); // Store fetched plans
+    const [availableSubjects, setAvailableSubjects] = useState([]); // Subjects from selected plan
 
     // Fetch Teachers, Rooms, and Plans on mount
     useEffect(() => {
         const fetchResources = async () => {
             try {
                 // Fetch Teachers
-                const teachersRes = await api.get("/api/GET/get_teachers.php");
-                if (Array.isArray(teachersRes.data)) {
-                    setTeacherList(teachersRes.data);
+                const teachers = await getTeachers();
+                if (Array.isArray(teachers)) {
+                    setTeacherList(teachers);
                 }
 
                 // Fetch Rooms
-                const roomsRes = await api.get("/api/GET/get_rooms.php");
-                if (Array.isArray(roomsRes.data)) {
-                    setRoomList(roomsRes.data);
+                const rooms = await getRooms();
+                if (Array.isArray(rooms)) {
+                    setRoomList(rooms);
                 }
 
                 // Fetch Study Plans
-                const plansRes = await api.get("/api/GET/Get_group_information.php");
-                if (Array.isArray(plansRes.data)) {
-                    // Process plans similar to Intoplan.jsx if needed, or just store raw for selection
-                    // For simplicity, we just filter unique labels for selection
-                    setStudyPlans(plansRes.data);
+                const plans = await getGroupInformation();
+                if (Array.isArray(plans)) {
+                    setStudyPlans(plans);
                 }
             } catch (err) {
                 console.error("Error fetching resources:", err);
@@ -106,12 +101,14 @@ export default function ScheduleCreate() {
         position: "top", // top / bottom / both
         subjectCode: "",
         subjectName: "",
+        courseid: "", // Add courseid
         detail: "",
         teacher: "",
 
         // ชุดที่ 2 (เฉพาะกรณี position = "both")
         subjectCode2: "",
         subjectName2: "",
+        courseid2: "", // Add courseid2
         detail2: "",
         teacher2: "",
     });
@@ -142,6 +139,55 @@ export default function ScheduleCreate() {
         const { name, value } = e.target;
         setEditor((prev) => ({ ...prev, [name]: value }));
     };
+
+    // Auto-fetch subjects when Header Info matches a plan
+    useEffect(() => {
+        const autoFetchSubjects = async () => {
+            let targetInfoid = headerInfo.infoid;
+
+            // If no direct infoid, try to find matching plan
+            if (!targetInfoid && headerInfo.level && headerInfo.group && headerInfo.year) {
+                // Find matching plan (Priority: Exact Term > Any Plan with same Group/Year)
+                let match = studyPlans.find(p =>
+                    p.sublevel == headerInfo.level &&
+                    p.group_name == headerInfo.group &&
+                    p.year == headerInfo.year &&
+                    p.term == headerInfo.term
+                );
+
+                if (!match) {
+                    // Fallback: Find any plan for this group/year
+                    match = studyPlans.find(p =>
+                        p.sublevel == headerInfo.level &&
+                        p.group_name == headerInfo.group &&
+                        p.year == headerInfo.year
+                    );
+                }
+                if (match) targetInfoid = match.infoid;
+            }
+
+            if (targetInfoid) {
+                console.log("Auto-fetching for infoid:", targetInfoid);
+                try {
+                    const subs = await getCourseInfo(targetInfoid);
+                    // Filter subjects: Match Term OR (Term 1 requested AND subject term is empty)
+                    const targetTerm = headerInfo.term;
+                    const filteredSubs = subs.filter(s =>
+                        s.term == targetTerm ||
+                        (targetTerm == '1' && !s.term)
+                    );
+                    setAvailableSubjects(filteredSubs || []);
+                } catch (err) {
+                    console.error("Auto-fetch failed:", err);
+                    setAvailableSubjects([]);
+                }
+            } else {
+                setAvailableSubjects([]);
+            }
+        };
+        const timer = setTimeout(autoFetchSubjects, 500); // Debounce
+        return () => clearTimeout(timer);
+    }, [headerInfo.level, headerInfo.group, headerInfo.year, headerInfo.term, studyPlans]);
 
     // เลือกวัน (step 1)
     const handleSelectDay = (day) => {
@@ -174,19 +220,21 @@ export default function ScheduleCreate() {
 
     // บันทึกข้อมูลลง schedule
     const handleSaveToSchedule = () => {
+        // Helpers for converting IDs to Names
+        const getTeacherName = (id) => {
+            if (!id) return "";
+            const t = teacherList.find(t => t.teacher_id == id);
+            return t ? `${t.first_name} ${t.last_name}` : id;
+        };
+        const getRoomName = (id) => {
+            if (!id) return "";
+            const r = roomList.find(r => r.room_id == id);
+            return r ? r.room_name : id;
+        };
+
         setSchedule((prev) => {
             const copy = { ...prev };
             const dayData = { ...(copy[editor.day] || {}) };
-
-            // ลบข้อมูลเก่าที่ทับซ้อนกับช่วงใหม่ (ถ้ามี)
-            // เช่น เดิมมี 1-2, 3-4 ถ้าเราเซฟ 2-3 ทับ มันควรจะเคลียร์ของเก่าไหม?
-            // เพื่อความง่าย: ทับไปเลยที่ start แต่ต้องระวังเรื่องการแสดงผล
-            // ในที่นี้เราจะบันทึกที่ key = start และเก็บ end ไว้ข้างใน
-
-            // เช็คว่ามี cell ไหนที่ทับซ้อนไหม (Optional logic)
-            // แต่เอาแบบง่ายคือ บันทึกทับลงไปที่ start
-            // และถ้ามี cell อื่นที่ start อยู่ในช่วงนี้ อาจจะต้องลบออก? 
-            // เพื่อป้องกันการ render ซ้อนกัน แต่ user ต้องจัดการเองระดับนึง
 
             // ลบ key ที่อยู่ในช่วง start+1 ถึง end (ถ้ามี) เพื่อไม่ให้ render ซ้ำ
             for (let i = editor.start + 1; i <= editor.end; i++) {
@@ -201,9 +249,9 @@ export default function ScheduleCreate() {
 
             // Construct Text 1
             const text1Line1 = `${editor.subjectCode || ""} ${editor.subjectName || ""}`.trim();
-            let text1Line2 = `${editor.detail || ""}`;
+            let text1Line2 = `${getRoomName(editor.detail) || ""}`;
             if (editor.group) text1Line2 += ` ก.${editor.group}`;
-            if (editor.teacher) text1Line2 += ` อ.${editor.teacher}`;
+            if (editor.teacher) text1Line2 += ` อ.${getTeacherName(editor.teacher)}`;
             text1Line2 = text1Line2.trim();
             const fullText1 = [text1Line1, text1Line2].filter(Boolean).join(" ");
 
@@ -215,46 +263,39 @@ export default function ScheduleCreate() {
 
                 // Top Data
                 let text1Line2 = "";
-                if (editor.teacher) text1Line2 += `อ.${editor.teacher} `;
+                if (editor.teacher) text1Line2 += `อ.${getTeacherName(editor.teacher)} `;
                 if (editor.group) text1Line2 += `ก.${editor.group} `;
-                text1Line2 += `${editor.detail || ""}`;
+                text1Line2 += `${getRoomName(editor.detail) || ""}`;
                 cell.top = [text1Line1, text1Line2.trim()].filter(Boolean).join(" ");
                 cell.topSubject = text1Line1;
                 cell.topLine2 = text1Line2.trim(); // Teacher + Group + Room
                 cell.topEndPeriod = editor.topEndPeriod ? parseInt(editor.topEndPeriod) : editor.end;
-                cell.centralRoom = editor.centralRoom || "";
-                cell.topRoom = editor.detail || "";
-                // cell.group removed from here as it's now part of top text
+                cell.centralRoom = getRoomName(editor.centralRoom) || "";
+                cell.topRoom = getRoomName(editor.detail) || "";
+                cell.courseid = editor.courseid || ""; // Save courseid
 
                 // Bottom Data
                 const text2Line1 = `${editor.subjectCode2 || ""} ${editor.subjectName2 || ""}`.trim();
                 let text2Line2 = "";
-                if (editor.teacher2) text2Line2 += `อ.${editor.teacher2} `;
+                if (editor.teacher2) text2Line2 += `อ.${getTeacherName(editor.teacher2)} `;
                 if (editor.group2) text2Line2 += `ก.${editor.group2} `;
-                text2Line2 += `${editor.detail2 || ""}`;
+                text2Line2 += `${getRoomName(editor.detail2) || ""}`;
                 cell.bottom = [text2Line1, text2Line2.trim()].filter(Boolean).join(" ");
                 cell.bottomSubject = text2Line1;
                 cell.bottomLine2 = text2Line2.trim(); // Teacher + Group + Room
                 cell.bottomEndPeriod = editor.bottomEndPeriod ? parseInt(editor.bottomEndPeriod) : editor.end;
-                cell.bottomRoom = editor.detail2 || "";
+                cell.bottomRoom = getRoomName(editor.detail2) || "";
+                cell.courseid2 = editor.courseid2 || ""; // Save courseid2
 
             } else if (editor.position === "both") {
                 // กรณี ทั้งบนและล่าง: แยกคนละวิชา
-                // ด้านบน = ชุดที่ 1
-                // ด้านล่าง = ชุดที่ 2
-
-                // ชุดที่ 1 Formatted (เอา Text1Line1 + Text1Line2 มารวมกัน หรือตามความเหมาะสม)
-                // ปกติด้านบนมักเป็น "รหัส ชื่อวิชา" 
-                // แต่ถ้า user กรอก detail/teacher มาในชุด 1 ด้วย ก็ควรแสดง?
-                // ในที่นี้สมมติ: Top = ชุด 1 ทั้งหมด, Bottom = ชุด 2 ทั้งหมด
-
                 cell.top = fullText1;
 
                 // ชุดที่ 2
                 const text2Line1 = `${editor.subjectCode2 || ""} ${editor.subjectName2 || ""}`.trim();
-                let text2Line2 = `${editor.detail2 || ""}`;
+                let text2Line2 = `${getRoomName(editor.detail2) || ""}`;
                 if (editor.group2) text2Line2 += ` ก.${editor.group2}`;
-                if (editor.teacher2) text2Line2 += ` อ.${editor.teacher2}`;
+                if (editor.teacher2) text2Line2 += ` อ.${getTeacherName(editor.teacher2)}`;
                 text2Line2 = text2Line2.trim();
                 const fullText2 = [text2Line1, text2Line2].filter(Boolean).join(" ");
 
@@ -264,42 +305,43 @@ export default function ScheduleCreate() {
                 // กรณี CTN: ห้องอยู่ซ้าย, ครู/กลุ่มอยู่ขวา
                 const topText = `${editor.subjectCode || ""} ${editor.subjectName || ""}`.trim();
                 cell.top = topText;
+                cell.courseid = editor.courseid || ""; // Save courseid
 
                 // เก็บข้อมูลแยกสำหรับ CTN layout
                 cell.isCTN = true;
-                cell.room = editor.detail || "";
+                cell.room = getRoomName(editor.detail) || "";
                 let teacherGroup = "";
-                if (editor.teacher) teacherGroup = `อ.${editor.teacher}`;
+                if (editor.teacher) teacherGroup = `อ.${getTeacherName(editor.teacher)}`;
                 if (editor.group) teacherGroup += (teacherGroup ? " " : "") + `ก.${editor.group}`;
                 cell.teacherGroup = teacherGroup;
 
                 // เก็บ bottom เป็น combined text สำหรับ fallback/editing
-                let bottomText = editor.detail || "";
-                if (editor.teacher) bottomText += (bottomText ? " " : "") + `อ.${editor.teacher}`;
+                let bottomText = getRoomName(editor.detail) || "";
+                if (editor.teacher) bottomText += (bottomText ? " " : "") + `อ.${getTeacherName(editor.teacher)}`;
                 if (editor.group) bottomText += (bottomText ? " " : "") + `ก.${editor.group}`;
                 cell.bottom = bottomText.trim();
 
             } else {
                 // กรณี Top หรือ Bottom
-                const topText = `${editor.subjectCode || ""} ${editor.subjectName || ""
-                    }`.trim();
+                const topText = `${editor.subjectCode || ""} ${editor.subjectName || ""}`.trim();
 
                 if (editor.position === "top") {
                     // สามัญ: ห้อง/ครู/กลุ่มรวมกันทางขวา
                     cell.top = topText;
+                    cell.courseid = editor.courseid || ""; // Save courseid
                     cell.isSamarn = true;
                     cell.room = ""; // ไม่แสดงห้องทางซ้าย
 
                     // รวมห้อง + อาจารย์ + กลุ่ม ทางขวา
                     let teacherGroup = "";
-                    if (editor.detail) teacherGroup = editor.detail; // ห้อง
-                    if (editor.teacher) teacherGroup += (teacherGroup ? " " : "") + `อ.${editor.teacher}`;
+                    if (editor.detail) teacherGroup = getRoomName(editor.detail); // ห้อง
+                    if (editor.teacher) teacherGroup += (teacherGroup ? " " : "") + `อ.${getTeacherName(editor.teacher)}`;
                     if (editor.group) teacherGroup += (teacherGroup ? " " : "") + `ก.${editor.group}`;
                     cell.teacherGroup = teacherGroup;
 
                     // เก็บ bottom สำหรับ fallback/editing
-                    let bottomText = editor.detail || "";
-                    if (editor.teacher) bottomText += (bottomText ? " " : "") + `อ.${editor.teacher}`;
+                    let bottomText = getRoomName(editor.detail) || "";
+                    if (editor.teacher) bottomText += (bottomText ? " " : "") + `อ.${getTeacherName(editor.teacher)}`;
                     if (editor.group) bottomText += (bottomText ? " " : "") + `ก.${editor.group}`;
                     cell.bottom = bottomText.trim();
                 } else if (editor.position === "single_samarn" || editor.position === "single_ctn") {
@@ -308,20 +350,19 @@ export default function ScheduleCreate() {
                     cell.singleType = editor.position; // single_samarn หรือ single_ctn
                     cell.subjectCode = editor.subjectCode || "";
                     cell.group = editor.group || "";
-                    cell.teacher = editor.teacher || "";
-                    cell.room = editor.detail || "";
+                    cell.teacher = getTeacherName(editor.teacher) || "";
+                    cell.room = getRoomName(editor.detail) || "";
 
                     // เก็บ top/bottom สำหรับ fallback
                     cell.top = editor.subjectCode || "";
                     let bottomText = "";
-                    if (editor.detail) bottomText = editor.detail;
-                    if (editor.teacher) bottomText += (bottomText ? " " : "") + `อ.${editor.teacher}`;
+                    if (editor.detail) bottomText = getRoomName(editor.detail);
+                    if (editor.teacher) bottomText += (bottomText ? " " : "") + `อ.${getTeacherName(editor.teacher)}`;
                     if (editor.group) bottomText += (bottomText ? " " : "") + `ก.${editor.group}`;
                     cell.bottom = bottomText.trim();
                 } else {
                     // Bottom mode (ถ้ามีอยู่)
-                    const bottomText = `${editor.detail || ""}${editor.teacher ? ` อ.${editor.teacher}` : ""
-                        }`.trim();
+                    const bottomText = `${getRoomName(editor.detail) || ""}${editor.teacher ? ` อ.${getTeacherName(editor.teacher)}` : ""}`.trim();
                     cell.bottom = bottomText;
                     if (topText) cell.top = topText;
                 }
@@ -364,6 +405,88 @@ export default function ScheduleCreate() {
             setSchedule(empty);
             setStep(1);
             // localStorage จะถูกอัพเดทโดย useEffect เอง
+        }
+    };
+
+    // บันทึกข้อมูลลงฐานข้อมูล (Save to DB)
+    const handleSaveToDatabase = async () => {
+        if (!headerInfo.infoid) {
+            alert("กรุณาเลือกแผนการเรียน (Import) ก่อนบันทึก เพื่อระบุว่าตารางนี้เป็นของแผนการเรียนใด");
+            return;
+        }
+
+        if (!window.confirm("คุณต้องการบันทึกตารางเรียนลงฐานข้อมูลใช่หรือไม่? (ข้อมูลเดิมของแผนการเรียนนี้จะถูกทับ)")) {
+            return;
+        }
+
+        const payload = [];
+
+        // Traverse schedule
+        for (const day of DAYS) {
+            const dayData = schedule[day] || {};
+            for (const startPeriod in dayData) {
+                const cell = dayData[startPeriod];
+                if (!cell) continue;
+
+                // Common data
+                const baseItem = {
+                    day: day,
+                    term: headerInfo.term,
+                    year: headerInfo.year
+                };
+
+                // Helper to push item
+                const pushItem = (cid, tid, rid, start, end) => {
+                    if (!cid) return; // Skip if no subject
+                    payload.push({
+                        ...baseItem,
+                        courseid: cid,
+                        teacher_id: tid,
+                        room_id: rid,
+                        start_period: parseInt(start),
+                        end_period: parseInt(end)
+                    });
+                };
+
+                // Use raw data from editor state saved in cell
+                const raw = cell.raw || {};
+
+                if (cell.isBothTimed) {
+                    // Top
+                    pushItem(cell.courseid, raw.teacher, raw.detail, cell.start || startPeriod, cell.topEndPeriod);
+                    // Bottom
+                    pushItem(cell.courseid2, raw.teacher2, raw.detail2, cell.start || startPeriod, cell.bottomEndPeriod);
+                } else if (cell.isBoth) {
+                    // Top
+                    pushItem(cell.courseid, raw.teacher, raw.detail, cell.start || startPeriod, cell.end);
+                    // Bottom
+                    pushItem(cell.courseid2, raw.teacher2, raw.detail2, cell.start || startPeriod, cell.end);
+                } else if (cell.isCTN) {
+                    // CTN Layout
+                    pushItem(cell.courseid, raw.teacher, raw.detail, cell.start || startPeriod, cell.end);
+                } else {
+                    // Single / Normal / Top / Bottom (Standard)
+                    pushItem(cell.courseid, raw.teacher, raw.detail, cell.start || startPeriod, cell.end);
+                }
+            }
+        }
+
+        // Send API
+        try {
+            const res = await fetch("http://localhost/i-love-my-job-main/server/api/POST/SaveTotalSchedule.php", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ infoid: headerInfo.infoid, schedule: payload, term: headerInfo.term })
+            });
+            const data = await res.json();
+            if (data.status === "success") {
+                alert("บันทึกข้อมูลเรียบร้อยแล้ว");
+            } else {
+                alert("เกิดข้อผิดพลาด: " + data.message);
+            }
+        } catch (e) {
+            console.error(e);
+            alert("เชื่อมต่อ Server ไม่ได้");
         }
     };
 
@@ -664,19 +787,12 @@ export default function ScheduleCreate() {
                 <div className="min-w-[1000px] bg-white p-4 md:p-6 shadow-lg rounded-lg">
                     {/* ---------- ฟอร์มหัวตาราง ---------- */}
                     <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-100 relative">
-                        <button
-                            onClick={handleReset}
-                            className="absolute top-4 right-4 px-3 py-1 bg-red-100 text-red-600 rounded border border-red-200 hover:bg-red-200 text-sm"
-                        >
-                            ล้างข้อมูลตาราง
-                        </button>
-
                         <h3 className="text-lg font-bold text-blue-800 mb-3 flex justify-between items-center">
                             <span>กรอกข้อมูลหัวตาราง</span>
                             {/* Import Button */}
                             <select
                                 className="text-xs font-normal border border-blue-300 rounded px-2 py-1 bg-white text-blue-600"
-                                onChange={(e) => {
+                                onChange={async (e) => {
                                     const planId = e.target.value;
                                     const selected = studyPlans.find(p => p.infoid == planId);
                                     if (selected) {
@@ -685,15 +801,21 @@ export default function ScheduleCreate() {
                                             level: selected.sublevel || prev.level,
                                             group: selected.group_name || prev.group,
                                             year: selected.year || prev.year,
-                                            // Optional: department if available in plan
+                                            term: selected.term || prev.term,
+                                            infoid: selected.infoid || prev.infoid,
                                         }));
+                                    } else {
+                                        // Clear if no selection? Or keep previous?
+                                        // If user selects "Select Plan" (empty), maybe clear infoid
+                                        setHeaderInfo(prev => ({ ...prev, infoid: "" }));
+                                        setAvailableSubjects([]);
                                     }
                                 }}
                             >
-                                <option value="">-- ดึงข้อมูลจากแผนการเรียน --</option>
+                                <option value="">-- ดึงข้อมูลแผนการเรียน --</option>
                                 {studyPlans.map(p => (
                                     <option key={p.infoid} value={p.infoid}>
-                                        {p.sublevel} ก.{p.group_name} ({p.year})
+                                        {p.sublevel} ก.{p.group_name} ({p.year}) เทอม {p.term}
                                     </option>
                                 ))}
                             </select>
@@ -841,69 +963,69 @@ export default function ScheduleCreate() {
 
                     {/* ---------- ตารางแบบเอกสารจริง (ใช้ logic block + arrow) ---------- */}
                     <div className="w-full overflow-x-auto mb-8">
-                        <table className="border-collapse border border-black text-[16px] text-center leading-tight table-fixed min-w-[1560px]">
+                        <table className="w-full border-collapse border border-black text-[13px] text-center leading-tight table-fixed">
 
 
 
                             <thead>
                                 <tr className="bg-white h-[48px]">
-                                    <th className="border border-black p-1 align-middle" style={{ width: 'calc(92% / 11)' }}>เวลา</th>
-                                    <th className="border border-black p-1" style={{ width: '4%' }}>
+                                    <th className="border border-black p-1 align-middle" style={{ width: 'calc(100% / 13)' }}>เวลา</th>
+                                    <th className="border border-black p-1" style={{ width: 'calc(100% / 13)' }}>
                                         07.30
                                         <br />
                                         08.00
                                     </th>
-                                    <th className="border border-black p-1" style={{ width: 'calc(92% / 11)' }}>
+                                    <th className="border border-black p-1" style={{ width: 'calc(100% / 13)' }}>
                                         08.00
                                         <br />
                                         09.00
                                     </th>
-                                    <th className="border border-black p-1" style={{ width: 'calc(92% / 11)' }}>
+                                    <th className="border border-black p-1" style={{ width: 'calc(100% / 13)' }}>
                                         09.00
                                         <br />
                                         10.00
                                     </th>
-                                    <th className="border border-black p-1" style={{ width: 'calc(92% / 11)' }}>
+                                    <th className="border border-black p-1" style={{ width: 'calc(100% / 13)' }}>
                                         10.00
                                         <br />
                                         11.00
                                     </th>
-                                    <th className="border border-black p-1" style={{ width: 'calc(92% / 11)' }}>
+                                    <th className="border border-black p-1" style={{ width: 'calc(100% / 13)' }}>
                                         11.00
                                         <br />
                                         12.00
                                     </th>
-                                    <th className="border border-black p-1" style={{ width: '4%' }}>
+                                    <th className="border border-black p-1" style={{ width: 'calc(100% / 13)' }}>
                                         12.00
                                         <br />
                                         13.00
                                     </th>
-                                    <th className="border border-black p-1" style={{ width: 'calc(92% / 11)' }}>
+                                    <th className="border border-black p-1" style={{ width: 'calc(100% / 13)' }}>
                                         13.00
                                         <br />
                                         14.00
                                     </th>
-                                    <th className="border border-black p-1" style={{ width: 'calc(92% / 11)' }}>
+                                    <th className="border border-black p-1" style={{ width: 'calc(100% / 13)' }}>
                                         14.00
                                         <br />
                                         15.00
                                     </th>
-                                    <th className="border border-black p-1" style={{ width: 'calc(92% / 11)' }}>
+                                    <th className="border border-black p-1" style={{ width: 'calc(100% / 13)' }}>
                                         15.00
                                         <br />
                                         16.00
                                     </th>
-                                    <th className="border border-black p-1" style={{ width: 'calc(92% / 11)' }}>
+                                    <th className="border border-black p-1" style={{ width: 'calc(100% / 13)' }}>
                                         16.00
                                         <br />
                                         17.00
                                     </th>
-                                    <th className="border border-black p-1" style={{ width: 'calc(92% / 11)' }}>
+                                    <th className="border border-black p-1" style={{ width: 'calc(100% / 13)' }}>
                                         17.00
                                         <br />
                                         18.00
                                     </th>
-                                    <th className="border border-black p-1" style={{ width: 'calc(92% / 11)' }}>
+                                    <th className="border border-black p-1" style={{ width: 'calc(100% / 13)' }}>
                                         18.00
                                         <br />
                                         19.00
@@ -962,7 +1084,7 @@ export default function ScheduleCreate() {
 
                     {/* ---------- Wizard จัดตาราง (ใช้ logic ใหม่) ---------- */}
                     <div className="border border-gray-300 rounded-lg p-4 bg-gray-50">
-                        <h3 className="font-bold mb-3">ฟังก์ชันจัดตารางเรียน (ปรับปรุงใหม่)</h3>
+                        <h3 className="font-bold mb-3">ฟังก์ชันจัดตารางเรียนCTN</h3>
 
                         {/* Step แถบ */}
                         <div className="flex flex-wrap gap-2 mb-4 text-sm">
@@ -1044,22 +1166,33 @@ export default function ScheduleCreate() {
                                     </div>
                                 </div>
 
-                                <p className="text-xs text-gray-500">หรือเลือกจากรูปแบบมาตรฐาน:</p>
-                                <div className="flex flex-wrap gap-2">
-                                    {STANDARD_BLOCKS.map((b, index) => (
-                                        <button
-                                            key={`${index}-${b.start}-${b.end}`}
-                                            type="button"
-                                            onClick={() => handleSelectBlock(b)}
-                                            className={`px-3 py-2 rounded border ${editor.start === b.start && editor.end === b.end
-                                                ? "bg-blue-600 text-white border-blue-600"
-                                                : "bg-white hover:bg-blue-50 border-gray-300"
-                                                }`}
-                                        >
-                                            {b.label}
-                                        </button>
-                                    ))}
-                                </div>
+                                {/* Available Subjects List */}
+                                {availableSubjects.length > 0 && (
+                                    <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
+                                        <p className="font-semibold mb-2 text-blue-800">รายวิชาในแผนการเรียน (คลิกเพื่อเลือก):</p>
+                                        <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">
+                                            {availableSubjects.map((subj) => (
+                                                <button
+                                                    key={subj.subject_id}
+                                                    type="button"
+                                                    onClick={() => setEditor(prev => ({
+                                                        ...prev,
+                                                        subjectCode: subj.course_code || "",
+                                                        subjectName: subj.course_name || "",
+                                                        subjectCode2: subj.course_code || "", // Auto-fill bottom too if needed? User can clear it.
+                                                        subjectName2: subj.course_name || ""
+                                                    }))}
+                                                    className="text-xs px-2 py-1 bg-white border border-blue-300 rounded hover:bg-blue-100 text-left"
+                                                    title={`${subj.course_code} ${subj.course_name}`}
+                                                >
+                                                    <span className="font-bold">{subj.course_code}</span> {subj.course_name}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Standard blocks selection removed */}
 
                                 <div className="flex justify-between mt-4">
                                     <button
@@ -1084,6 +1217,7 @@ export default function ScheduleCreate() {
                                 <p className="font-semibold">
                                     ขั้นที่ 3 : เลือกตำแหน่งในช่อง (ด้านบน / ด้านล่าง / ทั้งสอง)
                                 </p>
+
                                 <div className="flex flex-col gap-2">
                                     <label className="flex items-center gap-2 cursor-pointer p-2 border rounded hover:bg-gray-50">
                                         <input
@@ -1182,11 +1316,40 @@ export default function ScheduleCreate() {
                                     ขั้นที่ 4 : กรอกข้อมูลรายวิชา / รายละเอียด / ครูผู้สอน
                                 </p>
 
+
+
+
+
                                 {editor.position === "both_timed" ? (
                                     /* --- Both Timed Form --- */
                                     <div className="flex flex-col gap-4 bg-purple-50 p-4 border rounded">
                                         <div className="border-b pb-4">
                                             <h4 className="font-bold text-purple-700 mb-2">ส่วนที่ 1 (ด้านบน)</h4>
+
+                                            {/* Top Auto Fill */}
+                                            <div className="mb-2 bg-purple-100 p-2 rounded border border-purple-200">
+                                                <label className="block text-xs font-bold text-gray-700 mb-1">
+                                                    ดึงข้อมูลจากรายวิชา (Auto Fill ส่วนบน): {availableSubjects.length > 0 && <span className="text-green-600 font-normal ml-2">({availableSubjects.length})</span>}
+                                                </label>
+                                                <select
+                                                    className="w-full border border-gray-300 rounded px-2 py-1 text-xs"
+                                                    onChange={(e) => {
+                                                        const val = e.target.value;
+                                                        if (val) {
+                                                            const [code, name, cid] = val.split("|");
+                                                            setEditor(prev => ({ ...prev, subjectCode: code, subjectName: name, courseid: cid }));
+                                                        }
+                                                    }}
+                                                >
+                                                    <option value="">-- เลือกรายวิชา --</option>
+                                                    {availableSubjects.map((subj, i) => (
+                                                        <option key={`top-${subj.course_code}-${i}`} value={`${subj.course_code}|${subj.course_name}|${subj.courseid}`}>
+                                                            {subj.course_code} - {subj.course_name}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+
                                             <div className="grid grid-cols-2 gap-4">
                                                 <div><label className="block mb-1 text-xs font-semibold">รหัสวิชา</label><input name="subjectCode" value={editor.subjectCode} onChange={handleEditorChange} className="w-full border rounded px-2 py-1" /></div>
                                                 <div><label className="block mb-1 text-xs font-semibold">ชื่อวิชา</label><input name="subjectName" value={editor.subjectName} onChange={handleEditorChange} className="w-full border rounded px-2 py-1" /></div>
@@ -1195,7 +1358,7 @@ export default function ScheduleCreate() {
                                                     <select name="detail" value={editor.detail} onChange={handleEditorChange} className="w-full border rounded px-2 py-1">
                                                         <option value="">-- เลือกห้อง --</option>
                                                         {roomList.map(r => (
-                                                            <option key={r.room_id} value={r.room_name}>{r.room_name}</option>
+                                                            <option key={r.room_id} value={r.room_id}>{r.room_name}</option>
                                                         ))}
                                                     </select>
                                                 </div>
@@ -1204,7 +1367,7 @@ export default function ScheduleCreate() {
                                                     <select name="teacher" value={editor.teacher} onChange={handleEditorChange} className="w-full border rounded px-2 py-1">
                                                         <option value="">-- เลือกครู --</option>
                                                         {teacherList.map(t => (
-                                                            <option key={t.teacher_id} value={t.first_name}>{t.first_name} {t.last_name}</option>
+                                                            <option key={t.teacher_id} value={t.teacher_id}>{t.first_name} {t.last_name}</option>
                                                         ))}
                                                     </select>
                                                 </div>
@@ -1217,12 +1380,42 @@ export default function ScheduleCreate() {
                                             <select name="centralRoom" value={editor.centralRoom} onChange={handleEditorChange} className="w-1/2 mx-auto border rounded px-2 py-1">
                                                 <option value="">-- เลือกห้อง --</option>
                                                 {roomList.map(r => (
-                                                    <option key={r.room_id} value={r.room_name}>{r.room_name}</option>
+                                                    <option key={r.room_id} value={r.room_id}>{r.room_name}</option>
                                                 ))}
                                             </select>
                                         </div>
                                         <div>
                                             <h4 className="font-bold text-purple-700 mb-2">ส่วนที่ 2 (ด้านล่าง)</h4>
+
+                                            {/* Bottom Auto Fill */}
+                                            <div className="mb-2 bg-purple-100 p-2 rounded border border-purple-200">
+                                                <label className="block text-xs font-bold text-gray-700 mb-1">
+                                                    ดึงข้อมูลจากรายวิชา (Auto Fill ส่วนล่าง):
+                                                </label>
+                                                <select
+                                                    className="w-full border border-gray-300 rounded px-2 py-1 text-xs"
+                                                    onChange={(e) => {
+                                                        const val = e.target.value;
+                                                        if (val) {
+                                                            const [code, name, cid] = val.split("|");
+                                                            setEditor(prev => ({
+                                                                ...prev,
+                                                                subjectCode2: code,
+                                                                subjectName2: name,
+                                                                courseid2: cid
+                                                            }));
+                                                        }
+                                                    }}
+                                                >
+                                                    <option value="">-- เลือกรายวิชา --</option>
+                                                    {availableSubjects.map((subj, i) => (
+                                                        <option key={`bottom-${subj.course_code}-${i}`} value={`${subj.course_code}|${subj.course_name}|${subj.courseid}`}>
+                                                            {subj.course_code} - {subj.course_name}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+
                                             <div className="grid grid-cols-2 gap-4">
                                                 <div><label className="block mb-1 text-xs font-semibold">รหัสวิชา</label><input name="subjectCode2" value={editor.subjectCode2} onChange={handleEditorChange} className="w-full border rounded px-2 py-1" /></div>
                                                 <div><label className="block mb-1 text-xs font-semibold">ชื่อวิชา</label><input name="subjectName2" value={editor.subjectName2} onChange={handleEditorChange} className="w-full border rounded px-2 py-1" /></div>
@@ -1231,7 +1424,7 @@ export default function ScheduleCreate() {
                                                     <select name="detail2" value={editor.detail2} onChange={handleEditorChange} className="w-full border rounded px-2 py-1">
                                                         <option value="">-- เลือกห้อง --</option>
                                                         {roomList.map(r => (
-                                                            <option key={r.room_id} value={r.room_name}>{r.room_name}</option>
+                                                            <option key={r.room_id} value={r.room_id}>{r.room_name}</option>
                                                         ))}
                                                     </select>
                                                 </div>
@@ -1240,7 +1433,7 @@ export default function ScheduleCreate() {
                                                     <select name="teacher2" value={editor.teacher2} onChange={handleEditorChange} className="w-full border rounded px-2 py-1">
                                                         <option value="">-- เลือกครู --</option>
                                                         {teacherList.map(t => (
-                                                            <option key={t.teacher_id} value={t.first_name}>{t.first_name} {t.last_name}</option>
+                                                            <option key={t.teacher_id} value={t.teacher_id}>{t.first_name} {t.last_name}</option>
                                                         ))}
                                                     </select>
                                                 </div>
@@ -1255,6 +1448,30 @@ export default function ScheduleCreate() {
                                         {/* ส่วนที่ 1 (Top) */}
                                         <div className="space-y-2 border-r pr-0 md:pr-4 border-gray-300">
                                             <h4 className="font-bold text-blue-700 border-b pb-1 mb-2 pl-1">ส่วนที่ 1 (ด้านบน)</h4>
+
+                                            {/* Top Auto Fill */}
+                                            <div className="mb-2 bg-blue-50 p-2 rounded border border-blue-200">
+                                                <label className="block text-xs font-bold text-gray-700 mb-1">
+                                                    ดึงข้อมูลจากรายวิชา (Auto Fill): {availableSubjects.length > 0 && <span className="text-green-600 font-normal ml-2">({availableSubjects.length})</span>}
+                                                </label>
+                                                <select
+                                                    className="w-full border border-gray-300 rounded px-2 py-1 text-xs"
+                                                    onChange={(e) => {
+                                                        const val = e.target.value;
+                                                        if (val) {
+                                                            const [code, name] = val.split("|");
+                                                            setEditor(prev => ({ ...prev, subjectCode: code, subjectName: name }));
+                                                        }
+                                                    }}
+                                                >
+                                                    <option value="">-- เลือกรายวิชา --</option>
+                                                    {availableSubjects.map((subj, i) => (
+                                                        <option key={`top-2-${subj.course_code}-${i}`} value={`${subj.course_code}|${subj.course_name}`}>
+                                                            {subj.course_code} - {subj.course_name}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
                                             <div>
                                                 <label className="block mb-1 text-xs font-semibold pl-1">รหัสวิชา</label>
                                                 <input
@@ -1283,7 +1500,7 @@ export default function ScheduleCreate() {
                                                 >
                                                     <option value="">-- เลือกห้อง --</option>
                                                     {roomList.map(r => (
-                                                        <option key={r.room_id} value={r.room_name}>{r.room_name}</option>
+                                                        <option key={r.room_id} value={r.room_id}>{r.room_name}</option>
                                                     ))}
                                                 </select>
                                             </div>
@@ -1297,7 +1514,7 @@ export default function ScheduleCreate() {
                                                 >
                                                     <option value="">-- เลือกครู --</option>
                                                     {teacherList.map(t => (
-                                                        <option key={t.teacher_id} value={t.first_name}>{t.first_name} {t.last_name}</option>
+                                                        <option key={t.teacher_id} value={t.teacher_id}>{t.first_name} {t.last_name}</option>
                                                     ))}
                                                 </select>
                                             </div>
@@ -1320,6 +1537,34 @@ export default function ScheduleCreate() {
                                         {/* ส่วนที่ 2 (Bottom) */}
                                         <div className="space-y-2">
                                             <h4 className="font-bold text-green-700 border-b pb-1 mb-2 pl-1">ส่วนที่ 2 (ด้านล่าง)</h4>
+
+                                            {/* Bottom Auto Fill */}
+                                            <div className="mb-2 bg-green-50 p-2 rounded border border-green-200">
+                                                <label className="block text-xs font-bold text-gray-700 mb-1">
+                                                    ดึงข้อมูลจากรายวิชา (Auto Fill):
+                                                </label>
+                                                <select
+                                                    className="w-full border border-gray-300 rounded px-2 py-1 text-xs"
+                                                    onChange={(e) => {
+                                                        const val = e.target.value;
+                                                        if (val) {
+                                                            const [code, name] = val.split("|");
+                                                            setEditor(prev => ({
+                                                                ...prev,
+                                                                subjectCode2: code,
+                                                                subjectName2: name
+                                                            }));
+                                                        }
+                                                    }}
+                                                >
+                                                    <option value="">-- เลือกรายวิชา --</option>
+                                                    {availableSubjects.map((subj, i) => (
+                                                        <option key={`bottom-2-${subj.course_code}-${i}`} value={`${subj.course_code}|${subj.course_name}`}>
+                                                            {subj.course_code} - {subj.course_name}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
                                             <div>
                                                 <label className="block mb-1 text-xs font-semibold pl-1">รหัสวิชา</label>
                                                 <input
@@ -1348,7 +1593,7 @@ export default function ScheduleCreate() {
                                                 >
                                                     <option value="">-- เลือกห้อง --</option>
                                                     {roomList.map(r => (
-                                                        <option key={r.room_id} value={r.room_name}>{r.room_name}</option>
+                                                        <option key={r.room_id} value={r.room_id}>{r.room_name}</option>
                                                     ))}
                                                 </select>
                                             </div>
@@ -1362,7 +1607,7 @@ export default function ScheduleCreate() {
                                                 >
                                                     <option value="">-- เลือกครู --</option>
                                                     {teacherList.map(t => (
-                                                        <option key={t.teacher_id} value={t.first_name}>{t.first_name} {t.last_name}</option>
+                                                        <option key={t.teacher_id} value={t.teacher_id}>{t.first_name} {t.last_name}</option>
                                                     ))}
                                                 </select>
                                             </div>
@@ -1385,6 +1630,13 @@ export default function ScheduleCreate() {
                                 ) : editor.position === "ctn" ? (
                                     /* --- กรณีแบบ CTN (เหมือน Top แต่ layout ต่าง) --- */
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        <div className="md:col-span-2 mb-2 bg-gray-100 p-2 rounded border border-gray-200">
+                                            <label className="block text-xs font-bold text-gray-700 mb-1">Auto Fill: {availableSubjects.length > 0 && <span className="text-green-600 font-normal ml-2">({availableSubjects.length})</span>}</label>
+                                            <select className="w-full border rounded px-2 py-1 text-xs" onChange={(e) => { const val = e.target.value; if (val) { const [code, name, cid] = val.split("|"); setEditor(prev => ({ ...prev, subjectCode: code, subjectName: name, courseid: cid })); } }}>
+                                                <option value="">-- เลือกรายวิชา --</option>
+                                                {availableSubjects.map((subj, i) => (<option key={`ctn-${subj.course_code}-${i}`} value={`${subj.course_code}|${subj.course_name}|${subj.courseid}`}>{subj.course_code} - {subj.course_name}</option>))}
+                                            </select>
+                                        </div>
                                         <div>
                                             <label className="block mb-1">รหัสวิชา</label>
                                             <input
@@ -1415,7 +1667,7 @@ export default function ScheduleCreate() {
                                             >
                                                 <option value="">-- เลือกห้อง --</option>
                                                 {roomList.map(r => (
-                                                    <option key={r.room_id} value={r.room_name}>{r.room_name}</option>
+                                                    <option key={r.room_id} value={r.room_id}>{r.room_name}</option>
                                                 ))}
                                             </select>
                                         </div>
@@ -1429,7 +1681,7 @@ export default function ScheduleCreate() {
                                             >
                                                 <option value="">-- เลือกครู --</option>
                                                 {teacherList.map(t => (
-                                                    <option key={t.teacher_id} value={t.first_name}>{t.first_name} {t.last_name}</option>
+                                                    <option key={t.teacher_id} value={t.teacher_id}>{t.first_name} {t.last_name}</option>
                                                 ))}
                                             </select>
                                         </div>
@@ -1451,6 +1703,13 @@ export default function ScheduleCreate() {
                                 ) : (editor.position === "single_samarn" || editor.position === "single_ctn") ? (
                                     /* --- กรณี Single Period (จัดคาบเดียว) --- */
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-amber-50 p-4 border rounded">
+                                        <div className="md:col-span-2 mb-2 bg-white p-2 rounded border border-amber-200">
+                                            <label className="block text-xs font-bold text-gray-700 mb-1">Auto Fill: {availableSubjects.length > 0 && <span className="text-green-600 font-normal ml-2">({availableSubjects.length})</span>}</label>
+                                            <select className="w-full border rounded px-2 py-1 text-xs" onChange={(e) => { const val = e.target.value; if (val) { const [code, name] = val.split("|"); setEditor(prev => ({ ...prev, subjectCode: code, subjectName: name })); } }}>
+                                                <option value="">-- เลือกรายวิชา --</option>
+                                                {availableSubjects.map((subj, i) => (<option key={`single-${subj.course_code}-${i}`} value={`${subj.course_code}|${subj.course_name}`}>{subj.course_code} - {subj.course_name}</option>))}
+                                            </select>
+                                        </div>
                                         <div>
                                             <label className="block mb-1 font-semibold">รหัสวิชา</label>
                                             <input
@@ -1485,7 +1744,7 @@ export default function ScheduleCreate() {
                                             >
                                                 <option value="">-- เลือกห้อง --</option>
                                                 {roomList.map(r => (
-                                                    <option key={r.room_id} value={r.room_name}>{r.room_name}</option>
+                                                    <option key={r.room_id} value={r.room_id}>{r.room_name}</option>
                                                 ))}
                                             </select>
                                         </div>
@@ -1499,7 +1758,7 @@ export default function ScheduleCreate() {
                                             >
                                                 <option value="">-- เลือกครู --</option>
                                                 {teacherList.map(t => (
-                                                    <option key={t.teacher_id} value={t.first_name}>{t.first_name} {t.last_name}</option>
+                                                    <option key={t.teacher_id} value={t.teacher_id}>{t.first_name} {t.last_name}</option>
                                                 ))}
                                             </select>
                                         </div>
@@ -1516,6 +1775,13 @@ export default function ScheduleCreate() {
                                 ) : (
                                     /* --- กรณีแบบปกติ (Single) --- */
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        <div className="md:col-span-2 mb-2 bg-gray-100 p-2 rounded border border-gray-200">
+                                            <label className="block text-xs font-bold text-gray-700 mb-1">Auto Fill: {availableSubjects.length > 0 && <span className="text-green-600 font-normal ml-2">({availableSubjects.length})</span>}</label>
+                                            <select className="w-full border rounded px-2 py-1 text-xs" onChange={(e) => { const val = e.target.value; if (val) { const [code, name, cid] = val.split("|"); setEditor(prev => ({ ...prev, subjectCode: code, subjectName: name, courseid: cid })); } }}>
+                                                <option value="">-- เลือกรายวิชา --</option>
+                                                {availableSubjects.map((subj, i) => (<option key={`normal-${subj.course_code}-${i}`} value={`${subj.course_code}|${subj.course_name}|${subj.courseid}`}>{subj.course_code} - {subj.course_name}</option>))}
+                                            </select>
+                                        </div>
                                         <div>
                                             <label className="block mb-1">รหัสวิชา</label>
                                             <input
@@ -1538,25 +1804,33 @@ export default function ScheduleCreate() {
                                         </div>
                                         <div>
                                             <label className="block mb-1">
-                                                รายละเอียด / ห้อง / หมายเหตุ (แสดงในบรรทัดล่าง)
+                                                รายละเอียด / ห้อง
                                             </label>
-                                            <input
+                                            <select
                                                 name="detail"
                                                 value={editor.detail}
                                                 onChange={handleEditorChange}
                                                 className="w-full border border-gray-300 rounded px-2 py-1"
-                                                placeholder="เช่น Lab Network, tc.3/9"
-                                            />
+                                            >
+                                                <option value="">-- เลือกห้อง --</option>
+                                                {roomList.map(r => (
+                                                    <option key={r.room_id} value={r.room_id}>{r.room_name}</option>
+                                                ))}
+                                            </select>
                                         </div>
                                         <div>
                                             <label className="block mb-1">ครูผู้สอน</label>
-                                            <input
+                                            <select
                                                 name="teacher"
                                                 value={editor.teacher}
                                                 onChange={handleEditorChange}
                                                 className="w-full border border-gray-300 rounded px-2 py-1"
-                                                placeholder="เช่น เอกชัย / พรประภา"
-                                            />
+                                            >
+                                                <option value="">-- เลือกครู --</option>
+                                                {teacherList.map(t => (
+                                                    <option key={t.teacher_id} value={t.teacher_id}>{t.first_name} {t.last_name}</option>
+                                                ))}
+                                            </select>
                                         </div>
                                         <div>
                                             <label className="block mb-1">กลุ่ม (ถ้ามี)</label>
