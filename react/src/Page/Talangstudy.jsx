@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import Sidebar from "../components/Sidebar";
 import { getTeachers, getRooms, getGroupInformation, getCourseInfo } from "../services/getService";
+import Swal from 'sweetalert2';
+import { Save, Trash2 } from 'lucide-react';
 
 // วันหลัก
 const DAYS = ["จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์"];
@@ -143,11 +145,16 @@ export default function ScheduleCreate() {
     // Auto-fetch subjects when Header Info matches a plan
     useEffect(() => {
         const autoFetchSubjects = async () => {
-            let targetInfoid = headerInfo.infoid;
+            let targetPlanId = null;
 
-            // If no direct infoid, try to find matching plan
-            if (!targetInfoid && headerInfo.level && headerInfo.group && headerInfo.year) {
-                // Find matching plan (Priority: Exact Term > Any Plan with same Group/Year)
+            // 1. Try to find planid from the selected infoid (Group) in studyPlans
+            if (headerInfo.infoid) {
+                const match = studyPlans.find(p => p.infoid == headerInfo.infoid);
+                if (match) targetPlanId = match.planid;
+            }
+
+            // 2. Fallback: Find matching plan by Level/Group/Year
+            if (!targetPlanId && headerInfo.level && headerInfo.group && headerInfo.year) {
                 let match = studyPlans.find(p =>
                     p.sublevel == headerInfo.level &&
                     p.group_name == headerInfo.group &&
@@ -156,20 +163,19 @@ export default function ScheduleCreate() {
                 );
 
                 if (!match) {
-                    // Fallback: Find any plan for this group/year
                     match = studyPlans.find(p =>
                         p.sublevel == headerInfo.level &&
                         p.group_name == headerInfo.group &&
                         p.year == headerInfo.year
                     );
                 }
-                if (match) targetInfoid = match.infoid;
+                if (match) targetPlanId = match.planid;
             }
 
-            if (targetInfoid) {
-                console.log("Auto-fetching for infoid:", targetInfoid);
+            if (targetPlanId) {
+                console.log("Auto-fetching subjects for Plan ID:", targetPlanId);
                 try {
-                    const subs = await getCourseInfo(targetInfoid);
+                    const subs = await getCourseInfo(targetPlanId);
                     // Filter subjects: Match Term OR (Term 1 requested AND subject term is empty)
                     const targetTerm = headerInfo.term;
                     const filteredSubs = subs.filter(s =>
@@ -187,7 +193,7 @@ export default function ScheduleCreate() {
         };
         const timer = setTimeout(autoFetchSubjects, 500); // Debounce
         return () => clearTimeout(timer);
-    }, [headerInfo.level, headerInfo.group, headerInfo.year, headerInfo.term, studyPlans]);
+    }, [headerInfo.level, headerInfo.group, headerInfo.year, headerInfo.term, studyPlans, headerInfo.infoid]);
 
     // เลือกวัน (step 1)
     const handleSelectDay = (day) => {
@@ -399,25 +405,54 @@ export default function ScheduleCreate() {
     };
 
     // ล้างข้อมูลตาราง (Reset)
-    const handleReset = () => {
-        if (window.confirm("คุณต้องการล้างข้อมูลตารางเรียนทั้งหมดใช่หรือไม่?")) {
+    // ล้างข้อมูลตาราง (Reset)
+    const handleReset = async () => {
+        const result = await Swal.fire({
+            title: 'ยืนยันการล้างข้อมูล',
+            text: "คุณต้องการล้างข้อมูลตารางเรียนทั้งหมดใช่หรือไม่? (การกระทำนี้ไม่สามารถย้อนกลับได้)",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'ล้างข้อมูล',
+            cancelButtonText: 'ยกเลิก',
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6'
+        });
+
+        if (result.isConfirmed) {
             const empty = createEmptySchedule();
             setSchedule(empty);
             setStep(1);
-            // localStorage จะถูกอัพเดทโดย useEffect เอง
+            Swal.fire(
+                'ล้างข้อมูลเสร็จสิ้น',
+                'ตารางเรียนถูกรีเซ็ตเรียบร้อยแล้ว',
+                'success'
+            );
         }
     };
 
-    // บันทึกข้อมูลลงฐานข้อมูล (Save to DB)
+    // บันทึกข้อมูลลงฐานข้อมูล (Save to Database)
     const handleSaveToDatabase = async () => {
         if (!headerInfo.infoid) {
-            alert("กรุณาเลือกแผนการเรียน (Import) ก่อนบันทึก เพื่อระบุว่าตารางนี้เป็นของแผนการเรียนใด");
+            Swal.fire({
+                icon: 'warning',
+                title: 'กรุณาเลือกแผนการเรียน',
+                text: 'ต้องเลือกแผนการเรียน (Import) ก่อนบันทึก เพื่อระบุว่าตารางนี้เป็นของแผนใด'
+            });
             return;
         }
 
-        if (!window.confirm("คุณต้องการบันทึกตารางเรียนลงฐานข้อมูลใช่หรือไม่? (ข้อมูลเดิมของแผนการเรียนนี้จะถูกทับ)")) {
-            return;
-        }
+        const result = await Swal.fire({
+            title: 'ยืนยันการบันทึก',
+            text: "คุณต้องการบันทึกตารางเรียนลงฐานข้อมูลใช่หรือไม่? (ข้อมูลเดิมของแผนการเรียนนี้จะถูกทับ)",
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'บันทึกข้อมูล',
+            cancelButtonText: 'ยกเลิก',
+            confirmButtonColor: '#3085d6',
+            cancelButtonColor: '#d33'
+        });
+
+        if (!result.isConfirmed) return;
 
         const payload = [];
 
@@ -435,7 +470,7 @@ export default function ScheduleCreate() {
                     year: headerInfo.year
                 };
 
-                // Helper to push item
+                // Helper to push item (parse IDs from cell/raw)
                 const pushItem = (cid, tid, rid, start, end) => {
                     if (!cid) return; // Skip if no subject
                     payload.push({
@@ -453,9 +488,9 @@ export default function ScheduleCreate() {
 
                 if (cell.isBothTimed) {
                     // Top
-                    pushItem(cell.courseid, raw.teacher, raw.detail, cell.start || startPeriod, cell.topEndPeriod);
+                    pushItem(cell.courseid, raw.teacher, raw.detail, cell.start || startPeriod, cell.topEndPeriod || cell.end);
                     // Bottom
-                    pushItem(cell.courseid2, raw.teacher2, raw.detail2, cell.start || startPeriod, cell.bottomEndPeriod);
+                    pushItem(cell.courseid2, raw.teacher2, raw.detail2, cell.start || startPeriod, cell.bottomEndPeriod || cell.end);
                 } else if (cell.isBoth) {
                     // Top
                     pushItem(cell.courseid, raw.teacher, raw.detail, cell.start || startPeriod, cell.end);
@@ -480,13 +515,27 @@ export default function ScheduleCreate() {
             });
             const data = await res.json();
             if (data.status === "success") {
-                alert("บันทึกข้อมูลเรียบร้อยแล้ว");
+                Swal.fire({
+                    icon: 'success',
+                    title: 'บันทึกข้อมูลเรียบร้อย',
+                    text: 'ข้อมูลตารางเรียนถูกบันทึกลงฐานข้อมูลแล้ว',
+                    timer: 2000,
+                    showConfirmButton: false
+                });
             } else {
-                alert("เกิดข้อผิดพลาด: " + data.message);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'เกิดข้อผิดพลาด',
+                    text: data.message || 'ไม่สามารถบันทึกข้อมูลได้'
+                });
             }
         } catch (e) {
             console.error(e);
-            alert("เชื่อมต่อ Server ไม่ได้");
+            Swal.fire({
+                icon: 'error',
+                title: 'ข้อผิดพลาดการเชื่อมต่อ',
+                text: 'ไม่สามารถเชื่อมต่อกับ Server ได้'
+            });
         }
     };
 
@@ -785,40 +834,82 @@ export default function ScheduleCreate() {
 
             <main className="flex-1 lg:ml-64 p-4 md:p-6 overflow-x-auto">
                 <div className="min-w-[1000px] bg-white p-4 md:p-6 shadow-lg rounded-lg">
-                    {/* ---------- ฟอร์มหัวตาราง ---------- */}
                     <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-100 relative">
                         <h3 className="text-lg font-bold text-blue-800 mb-3 flex justify-between items-center">
                             <span>กรอกข้อมูลหัวตาราง</span>
-                            {/* Import Button */}
-                            <select
-                                className="text-xs font-normal border border-blue-300 rounded px-2 py-1 bg-white text-blue-600"
-                                onChange={async (e) => {
-                                    const planId = e.target.value;
-                                    const selected = studyPlans.find(p => p.infoid == planId);
-                                    if (selected) {
-                                        setHeaderInfo(prev => ({
-                                            ...prev,
-                                            level: selected.sublevel || prev.level,
-                                            group: selected.group_name || prev.group,
-                                            year: selected.year || prev.year,
-                                            term: selected.term || prev.term,
-                                            infoid: selected.infoid || prev.infoid,
-                                        }));
-                                    } else {
-                                        // Clear if no selection? Or keep previous?
-                                        // If user selects "Select Plan" (empty), maybe clear infoid
-                                        setHeaderInfo(prev => ({ ...prev, infoid: "" }));
-                                        setAvailableSubjects([]);
-                                    }
-                                }}
-                            >
-                                <option value="">-- ดึงข้อมูลแผนการเรียน --</option>
-                                {studyPlans.map(p => (
-                                    <option key={p.infoid} value={p.infoid}>
-                                        {p.sublevel} ก.{p.group_name} ({p.year}) เทอม {p.term}
-                                    </option>
-                                ))}
-                            </select>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={handleSaveToDatabase}
+                                    className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded shadow text-sm font-medium transition-colors"
+                                >
+                                    <Save size={16} />
+                                    <Save size={16} />
+                                    บันทึกลง Database
+                                </button>
+                                <button
+                                    onClick={handleReset}
+                                    className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded shadow text-sm font-medium transition-colors"
+                                >
+                                    <Trash2 size={16} />
+                                    ล้างข้อมูล
+                                </button>
+                                {/* Import Button */}
+                                <select
+                                    className="text-xs font-normal border border-blue-300 rounded px-2 py-1.5 bg-white text-blue-600 focus:ring-2 focus:ring-blue-200 outline-none"
+                                    onChange={async (e) => {
+                                        const planId = e.target.value;
+                                        const selected = studyPlans.find(p => p.infoid == planId);
+                                        if (selected) {
+                                            setHeaderInfo(prev => ({
+                                                ...prev,
+                                                level: selected.sublevel || prev.level,
+                                                group: selected.group_name || prev.group,
+                                                year: selected.year || prev.year,
+                                                term: selected.term || prev.term,
+                                                infoid: selected.infoid || prev.infoid,
+                                            }));
+
+                                            // Auto-fetch subjects for the selected plan (Using Study Plan API)
+                                            try {
+                                                const res = await fetch(`/i-love-my-job-main/server/api/GET/Getcourse.php?infoid=${planId}`);
+                                                const data = await res.json();
+                                                // Map API data to availableSubjects structure if needed
+                                                // API returns: [{ subject_id, course_code, course_name, term }, ...]
+                                                // Frontend likely expects similar structure
+                                                if (Array.isArray(data)) {
+                                                    setAvailableSubjects(data);
+                                                    Swal.fire({
+                                                        icon: 'success',
+                                                        title: 'ดึงข้อมูลสำเร็จ',
+                                                        text: `พบ ${data.length} วิชาในแผนการเรียน`,
+                                                        timer: 1500,
+                                                        showConfirmButton: false
+                                                    });
+                                                }
+                                            } catch (err) {
+                                                console.error("Failed to fetch subjects:", err);
+                                                Swal.fire({
+                                                    icon: 'error',
+                                                    title: 'ดึงข้อมูลล้มเหลว',
+                                                    text: 'ไม่สามารถเชื่อมต่อกับฐานข้อมูลได้'
+                                                });
+                                            }
+                                        } else {
+                                            // Clear if no selection? Or keep previous?
+                                            // If user selects "Select Plan" (empty), maybe clear infoid
+                                            setHeaderInfo(prev => ({ ...prev, infoid: "" }));
+                                            setAvailableSubjects([]);
+                                        }
+                                    }}
+                                >
+                                    <option value="">-- ดึงข้อมูลแผนการเรียน --</option>
+                                    {studyPlans.map(p => (
+                                        <option key={p.infoid} value={p.infoid}>
+                                            {p.sublevel} ก.{p.group_name} ({p.year}) เทอม {p.term}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
                         </h3>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div>
@@ -1177,9 +1268,11 @@ export default function ScheduleCreate() {
                                                     type="button"
                                                     onClick={() => setEditor(prev => ({
                                                         ...prev,
+                                                        courseid: subj.subject_id, // Critical: capture ID for DB
                                                         subjectCode: subj.course_code || "",
                                                         subjectName: subj.course_name || "",
-                                                        subjectCode2: subj.course_code || "", // Auto-fill bottom too if needed? User can clear it.
+                                                        courseid2: subj.subject_id, // Auto-fill bottom too?
+                                                        subjectCode2: subj.course_code || "",
                                                         subjectName2: subj.course_name || ""
                                                     }))}
                                                     className="text-xs px-2 py-1 bg-white border border-blue-300 rounded hover:bg-blue-100 text-left"

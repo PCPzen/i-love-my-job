@@ -10,7 +10,7 @@ if (!$planid) {
 }
 
 try {
-    $stmt = $conn->prepare("SELECT course_code, course_name FROM subject WHERE planid = :planid ORDER BY course_code ASC");
+    $stmt = $conn->prepare("SELECT subject_id as courseid, course_code, course_name, term FROM subject WHERE planid = :planid ORDER BY course_code ASC");
     $stmt->bindParam(':planid', $planid, PDO::PARAM_INT);
     $stmt->execute();
     $subjects = $stmt->fetchAll(PDO::FETCH_ASSOC);

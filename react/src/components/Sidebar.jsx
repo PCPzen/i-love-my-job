@@ -216,6 +216,18 @@ function Sidebar() {
               พิมพ์ตารางเรียน
             </Link>
           </li>
+
+          {/* ประวัติการจัดตาราง */}
+          <li>
+            <Link
+              to="/history-schedule"
+              className={`${linkBaseClasses} ${isActive("/history-schedule") ? linkActiveClasses : linkInactiveClasses
+                }`}
+            >
+              <LucideIcons.History className="w-5 h-5 mr-2" />
+              ประวัติการจัดตาราง
+            </Link>
+          </li>
           {/* สามารถเพิ่มเมนู "ดูตารางเรียนทั้งหมด" ตรงนี้ได้ */}
           {/* <li>
               <Link

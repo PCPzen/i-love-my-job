@@ -22,6 +22,7 @@ import Intomohou from "./Page/Intomohou";
 
 // *** เพิ่มบรรทัดนี้ เพื่อแก้ Error ReferenceError ***
 import Studentroomadd from "./Page/Studentroomadd";
+import HistorySchedule from "./Page/HistorySchedule";
 
 export default function App() {
   return (
@@ -30,6 +31,7 @@ export default function App() {
       <Route path="/" element={<Navigate to="/courseinfo" replace />} />
 
       {/* ใช้ path เป็นตัวพิมพ์เล็กทั้งหมด */}
+      <Route path="/history-schedule" element={<HistorySchedule />} />
       <Route path="/studentroomadd" element={<Studentroomadd />} />
       <Route path="/talangprint" element={<TalangPrint />} />
       <Route path="/teacheradd" element={<Teacheradd />} />

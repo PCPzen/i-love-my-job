@@ -23,7 +23,7 @@ try {
     // 1. Clear existing schedule for this Plan (infoid)
     // We find all courseids belonging to this infoid and delete their schedule entries
     // This allows overwrite behavior for the "Save" function.
-    
+
     // First, verify we can find courses for this infoid
     $sql_get_courses = "SELECT courseid FROM course_information WHERE infoid = :infoid";
     $stmt_get_courses = $conn->prepare($sql_get_courses);
@@ -38,7 +38,7 @@ try {
         $sql_delete = "DELETE FROM create_study_table WHERE courseid IN ($inQuery)";
         $stmt_delete = $conn->prepare($sql_delete);
         foreach ($course_ids as $k => $id) {
-            $stmt_delete->bindValue(($k+1), $id, PDO::PARAM_INT);
+            $stmt_delete->bindValue(($k + 1), $id, PDO::PARAM_INT);
         }
         $stmt_delete->execute();
     }
@@ -54,49 +54,83 @@ try {
     $stmt_time_start = $conn->prepare("SELECT start_time FROM timeslots WHERE id = :id");
     $stmt_time_end = $conn->prepare("SELECT end_time FROM timeslots WHERE id = :id");
 
+    // Prepare statements for Course Info Lookup/Insert
+    $sql_check_course = "SELECT courseid FROM course_information WHERE infoid = :infoid AND subject_id = :subject_id LIMIT 1";
+    $stmt_check_course = $conn->prepare($sql_check_course);
+
+    $sql_insert_course_info = "INSERT INTO course_information (infoid, subject_id, year, term) VALUES (:infoid, :subject_id, :year, :term)";
+    $stmt_insert_course_info = $conn->prepare($sql_insert_course_info);
+
     foreach ($schedule as $item) {
         // Skip invalid items
-        if (empty($item->courseid)) continue;
+        if (empty($item->courseid))
+            continue;
 
-        // Calculate Start Time (from start_period)
+        $subject_id = $item->courseid; // Frontend sends subject_id as courseid
+        $real_courseid = null;
+
+        // 1. Find existing course_information
+        $stmt_check_course->bindValue(':infoid', $infoid, PDO::PARAM_INT);
+        $stmt_check_course->bindValue(':subject_id', $subject_id, PDO::PARAM_INT);
+        $stmt_check_course->execute();
+        $real_courseid = $stmt_check_course->fetchColumn();
+
+        // 2. If not found, create it (Auto-register subject to group)
+        if (!$real_courseid) {
+            // Validate subject_id exists in subject table first (Prevent FK Error 1452)
+            $stmt_validate_subj = $conn->prepare("SELECT COUNT(*) FROM subject WHERE subject_id = :sid");
+            $stmt_validate_subj->execute([':sid' => $subject_id]);
+            if ($stmt_validate_subj->fetchColumn() == 0) {
+                // If subject does not exist, FAIL the entire transaction
+                throw new Exception("รหัสวิชา (ID: $subject_id) ไม่ถูกต้องหรือไม่มีอยู่ในระบบ กรุณาตรวจสอบข้อมูลรายวิชา");
+            }
+
+            // Need year? We have $term. Year should be from group?
+            // Let's query year from group_information using infoid first (outside loop)
+            // Or use $data->year if passed? Frontend sends Infoid.
+            // Let's assume we fetch year from Group once.
+            if (!isset($group_year)) {
+                $stmt_gy = $conn->prepare("SELECT year FROM group_information WHERE infoid = :id");
+                $stmt_gy->execute([':id' => $infoid]);
+                $group_year = $stmt_gy->fetchColumn() ?: date("Y"); // Fallback
+            }
+
+            $stmt_insert_course_info->bindValue(':infoid', $infoid, PDO::PARAM_INT);
+            $stmt_insert_course_info->bindValue(':subject_id', $subject_id, PDO::PARAM_INT);
+            $stmt_insert_course_info->bindValue(':year', $group_year, PDO::PARAM_STR);
+            $stmt_insert_course_info->bindValue(':term', $term, PDO::PARAM_STR);
+            $stmt_insert_course_info->execute();
+            $real_courseid = $conn->lastInsertId();
+        }
+
+        // Calculate Start/End Time (Same as before)
         $stmt_time_start->bindParam(':id', $item->start_period, PDO::PARAM_INT);
         $stmt_time_start->execute();
         $row_start = $stmt_time_start->fetch(PDO::FETCH_ASSOC);
-        
-        // Calculate End Time (from end_period)
+
         $stmt_time_end->bindParam(':id', $item->end_period, PDO::PARAM_INT);
         $stmt_time_end->execute();
         $row_end = $stmt_time_end->fetch(PDO::FETCH_ASSOC);
 
-        if (!$row_start || !$row_end) {
-            // If time not found, skip or error? Let's skip safely but log?
-            continue; 
-        }
+        if (!$row_start || !$row_end)
+            continue;
 
-        $s_time_str = $row_start['start_time']; // e.g. "08:30"
-        $e_time_str = $row_end['end_time'];     // e.g. "09:30" (Note: We use End Period's End Time)
-
-        // Convert to Int (e.g. 830, 930)
+        $s_time_str = $row_start['start_time'];
+        $e_time_str = $row_end['end_time'];
         $start_time_int = (int) str_replace(':', '', $s_time_str);
         $end_time_int = (int) str_replace(':', '', $e_time_str);
 
-        // Bind and Execute Insert
-        $courseid_val = $item->courseid;
-        $teacher_id_val = !empty($item->teacher_id) ? $item->teacher_id : null; // Allow null teacher? Schema might require int. 
-        // If teacher_id is empty string, make it 0 or NULL? DB likely INT. 
-        // Let's assume 0 if empty for safety if DB is strict not null default 0
-        if (empty($teacher_id_val)) $teacher_id_val = 0;
-
+        $teacher_id_val = !empty($item->teacher_id) ? $item->teacher_id : 0;
         $room_id_val = !empty($item->room_id) ? $item->room_id : 0;
 
-        $stmt_insert->bindValue(':courseid', $courseid_val, PDO::PARAM_INT);
+        $stmt_insert->bindValue(':courseid', $real_courseid, PDO::PARAM_INT); // Use PK
         $stmt_insert->bindValue(':teacher_id', $teacher_id_val, PDO::PARAM_INT);
         $stmt_insert->bindValue(':room_id', $room_id_val, PDO::PARAM_INT);
         $stmt_insert->bindValue(':date', $item->day, PDO::PARAM_STR);
         $stmt_insert->bindValue(':start_time', $start_time_int, PDO::PARAM_INT);
         $stmt_insert->bindValue(':end_time', $end_time_int, PDO::PARAM_INT);
         $stmt_insert->bindValue(':term', $term, PDO::PARAM_STR);
-        
+
         $stmt_insert->execute();
     }
 
