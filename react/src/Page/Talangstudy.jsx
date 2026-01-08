@@ -150,7 +150,7 @@ export default function ScheduleCreate() {
             // 1. Try to find planid from the selected infoid (Group) in studyPlans
             if (headerInfo.infoid) {
                 const match = studyPlans.find(p => p.infoid == headerInfo.infoid);
-                if (match) targetPlanId = match.planid;
+                if (match) targetPlanId = match.infoid;
             }
 
             // 2. Fallback: Find matching plan by Level/Group/Year
@@ -169,11 +169,11 @@ export default function ScheduleCreate() {
                         p.year == headerInfo.year
                     );
                 }
-                if (match) targetPlanId = match.planid;
+                if (match) targetPlanId = match.infoid;
             }
 
             if (targetPlanId) {
-                console.log("Auto-fetching subjects for Plan ID:", targetPlanId);
+                console.log("Auto-fetching subjects for Info ID:", targetPlanId);
                 try {
                     const subs = await getCourseInfo(targetPlanId);
                     // Filter subjects: Match Term OR (Term 1 requested AND subject term is empty)
@@ -511,7 +511,13 @@ export default function ScheduleCreate() {
             const res = await fetch("http://localhost/i-love-my-job-main/server/api/POST/SaveTotalSchedule.php", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ infoid: headerInfo.infoid, schedule: payload, term: headerInfo.term })
+                body: JSON.stringify({
+                    infoid: headerInfo.infoid,
+                    schedule: payload,
+                    term: headerInfo.term,
+                    group: headerInfo.group,
+                    studentCount: headerInfo.studentCount
+                })
             });
             const data = await res.json();
             if (data.status === "success") {
@@ -686,7 +692,7 @@ export default function ScheduleCreate() {
                                         }}
                                     >
                                         <div className="w-full overflow-hidden">
-                                            <div className={`w-full text-left whitespace-nowrap ${getScaleClass(cellData.top, cellData.topEndPeriod - current + 1)}`}>{cellData.top}</div>
+                                            <div className={`w-full text-left whitespace-nowrap text-[12px] leading-tight overflow-hidden`}>{cellData.top}</div>
                                         </div>
                                         {/* Vertical Line for Top Section Only */}
                                         {((cellData.topEndPeriod - current + 1) < span) && (
@@ -718,7 +724,7 @@ export default function ScheduleCreate() {
                                 {/* Center Room */}
                                 <div className="flex justify-center items-center text-center w-full leading-none py-1 z-10 bg-white text-[12px] whitespace-nowrap overflow-hidden">
                                     {cellData.centralRoom && (
-                                        <span className={getScaleClass(cellData.centralRoom, span)}>
+                                        <span className="text-[10px] font-normal whitespace-nowrap overflow-hidden px-1">
                                             {cellData.centralRoom}
                                         </span>
                                     )}
@@ -747,7 +753,7 @@ export default function ScheduleCreate() {
                                         }}
                                     >
                                         <div className="w-full overflow-hidden">
-                                            <div className={`w-full text-left whitespace-nowrap ${getScaleClass(cellData.bottom, cellData.bottomEndPeriod - current + 1)}`}>{cellData.bottom}</div>
+                                            <div className={`w-full text-left whitespace-nowrap text-[12px] leading-tight overflow-hidden`}>{cellData.bottom}</div>
                                         </div>
                                         {/* Vertical Line for Bottom Section Only */}
                                         {((cellData.bottomEndPeriod - current + 1) < span) && (
@@ -869,31 +875,7 @@ export default function ScheduleCreate() {
                                                 infoid: selected.infoid || prev.infoid,
                                             }));
 
-                                            // Auto-fetch subjects for the selected plan (Using Study Plan API)
-                                            try {
-                                                const res = await fetch(`/i-love-my-job-main/server/api/GET/Getcourse.php?infoid=${planId}`);
-                                                const data = await res.json();
-                                                // Map API data to availableSubjects structure if needed
-                                                // API returns: [{ subject_id, course_code, course_name, term }, ...]
-                                                // Frontend likely expects similar structure
-                                                if (Array.isArray(data)) {
-                                                    setAvailableSubjects(data);
-                                                    Swal.fire({
-                                                        icon: 'success',
-                                                        title: 'ดึงข้อมูลสำเร็จ',
-                                                        text: `พบ ${data.length} วิชาในแผนการเรียน`,
-                                                        timer: 1500,
-                                                        showConfirmButton: false
-                                                    });
-                                                }
-                                            } catch (err) {
-                                                console.error("Failed to fetch subjects:", err);
-                                                Swal.fire({
-                                                    icon: 'error',
-                                                    title: 'ดึงข้อมูลล้มเหลว',
-                                                    text: 'ไม่สามารถเชื่อมต่อกับฐานข้อมูลได้'
-                                                });
-                                            }
+                                            // The useEffect listening to headerInfo.infoid will handle the fetching
                                         } else {
                                             // Clear if no selection? Or keep previous?
                                             // If user selects "Select Plan" (empty), maybe clear infoid
@@ -1060,63 +1042,63 @@ export default function ScheduleCreate() {
 
                             <thead>
                                 <tr className="bg-white h-[48px]">
-                                    <th className="border border-black p-1 align-middle" style={{ width: 'calc(100% / 13)' }}>เวลา</th>
-                                    <th className="border border-black p-1" style={{ width: 'calc(100% / 13)' }}>
+                                    <th className="border border-black p-1 align-middle min-w-[100px] w-[100px]">เวลา</th>
+                                    <th className="border border-black p-1 min-w-[100px] w-[100px]">
                                         07.30
                                         <br />
                                         08.00
                                     </th>
-                                    <th className="border border-black p-1" style={{ width: 'calc(100% / 13)' }}>
+                                    <th className="border border-black p-1 min-w-[100px] w-[100px]">
                                         08.00
                                         <br />
                                         09.00
                                     </th>
-                                    <th className="border border-black p-1" style={{ width: 'calc(100% / 13)' }}>
+                                    <th className="border border-black p-1 min-w-[100px] w-[100px]">
                                         09.00
                                         <br />
                                         10.00
                                     </th>
-                                    <th className="border border-black p-1" style={{ width: 'calc(100% / 13)' }}>
+                                    <th className="border border-black p-1 min-w-[100px] w-[100px]">
                                         10.00
                                         <br />
                                         11.00
                                     </th>
-                                    <th className="border border-black p-1" style={{ width: 'calc(100% / 13)' }}>
+                                    <th className="border border-black p-1 min-w-[100px] w-[100px]">
                                         11.00
                                         <br />
                                         12.00
                                     </th>
-                                    <th className="border border-black p-1" style={{ width: 'calc(100% / 13)' }}>
+                                    <th className="border border-black p-1 min-w-[100px] w-[100px]">
                                         12.00
                                         <br />
                                         13.00
                                     </th>
-                                    <th className="border border-black p-1" style={{ width: 'calc(100% / 13)' }}>
+                                    <th className="border border-black p-1 min-w-[100px] w-[100px]">
                                         13.00
                                         <br />
                                         14.00
                                     </th>
-                                    <th className="border border-black p-1" style={{ width: 'calc(100% / 13)' }}>
+                                    <th className="border border-black p-1 min-w-[100px] w-[100px]">
                                         14.00
                                         <br />
                                         15.00
                                     </th>
-                                    <th className="border border-black p-1" style={{ width: 'calc(100% / 13)' }}>
+                                    <th className="border border-black p-1 min-w-[100px] w-[100px]">
                                         15.00
                                         <br />
                                         16.00
                                     </th>
-                                    <th className="border border-black p-1" style={{ width: 'calc(100% / 13)' }}>
+                                    <th className="border border-black p-1 min-w-[100px] w-[100px]">
                                         16.00
                                         <br />
                                         17.00
                                     </th>
-                                    <th className="border border-black p-1" style={{ width: 'calc(100% / 13)' }}>
+                                    <th className="border border-black p-1 min-w-[100px] w-[100px]">
                                         17.00
                                         <br />
                                         18.00
                                     </th>
-                                    <th className="border border-black p-1" style={{ width: 'calc(100% / 13)' }}>
+                                    <th className="border border-black p-1 min-w-[100px] w-[100px]">
                                         18.00
                                         <br />
                                         19.00

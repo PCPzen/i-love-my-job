@@ -34,9 +34,8 @@ export const getGroupInformation = async () => {
 export const getCourseInfo = async (id) => {
     if (!id) return [];
     try {
-        // Using GetPlanSubjects.php which returns a flat list of subjects given a plan/info ID.
-        // Assuming the ID passed is a planid or compatible.
-        const response = await api.get(`/api/GET/GetPlanSubjects.php?planid=${id}`);
+        // Use Getcourse.php to fetch subjects assigned to a specific Group (infoid)
+        const response = await api.get(`/api/GET/Getcourse.php?infoid=${id}`);
         return Array.isArray(response.data) ? response.data : [];
     } catch (error) {
         console.error("Error fetching course info:", error);

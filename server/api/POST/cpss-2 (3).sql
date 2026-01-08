@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Nov 05, 2025 at 08:14 AM
+-- Generation Time: Jan 06, 2026 at 07:15 PM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -48,7 +48,10 @@ INSERT INTO `course_information` (`courseid`, `planid`, `infoid`, `subject_id`, 
 (357, 0, 506, 423, '2567', '1'),
 (358, 0, 506, 424, '2567', '1'),
 (359, 0, 506, 425, '2567', '1'),
-(360, 0, 506, 426, '2567', '1');
+(360, 0, 506, 426, '2567', '1'),
+(361, 0, 506, 427, '2567', '2'),
+(362, 0, 506, 429, '2567', '2'),
+(363, 0, 506, 428, '2567', '2');
 
 -- --------------------------------------------------------
 
@@ -61,6 +64,7 @@ CREATE TABLE `create_study_table` (
   `teacher_id` int(11) NOT NULL,
   `courseid` int(11) NOT NULL,
   `room_id` int(11) NOT NULL,
+  `group_section` varchar(50) NOT NULL DEFAULT '',
   `planid` int(11) NOT NULL,
   `date` varchar(20) DEFAULT NULL,
   `start_time` int(11) DEFAULT NULL,
@@ -71,6 +75,14 @@ CREATE TABLE `create_study_table` (
   `active` tinyint(1) DEFAULT NULL,
   `term` varchar(10) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='เก็บข้อมูลตารางเรียน';
+
+--
+-- Dumping data for table `create_study_table`
+--
+
+INSERT INTO `create_study_table` (`field_id`, `teacher_id`, `courseid`, `room_id`, `group_section`, `planid`, `date`, `start_time`, `end_time`, `status_category`, `status_carry_out`, `group_name`, `active`, `term`) VALUES
+(6, 21, 362, 1, '', 0, 'พุธ', 800, 1200, NULL, NULL, NULL, NULL, '2'),
+(7, 22, 361, 1, '', 0, 'พุธ', 800, 1100, NULL, NULL, NULL, NULL, '2');
 
 -- --------------------------------------------------------
 
@@ -131,6 +143,14 @@ CREATE TABLE `room` (
   `building` varchar(100) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='เก็บข้อมูลห้อง';
 
+--
+-- Dumping data for table `room`
+--
+
+INSERT INTO `room` (`room_id`, `room_name`, `room_type`, `capacity`, `building`) VALUES
+(1, 'PTC 2/5', 'Meeting', 30, '1'),
+(2, 'PTC 4/2', 'Other', 40, 'sdada');
+
 -- --------------------------------------------------------
 
 --
@@ -186,7 +206,10 @@ INSERT INTO `subject` (`subject_id`, `course_code`, `course_name`, `theory`, `co
 (423, '21321-3213', 'sadsa', 3, 1, 1, '2.หมวดวิชาสมรรถนะวิชาชีพ', '2.1 กลุ่มสมรรถนะวิชาชีพพื้นฐาน', 101),
 (424, '15123', '3213123', 3, 2, 2, '2.หมวดวิชาสมรรถนะวิชาชีพ', '2.2 กลุ่มสมรรถนะวิชาชีพเฉพาะ', 101),
 (425, '32131-2321', '1221321', 1, 1, 1, '3.หมวดวิชาเลือกเสรี', '', 101),
-(426, '23212-132', '321331', 2, 1, 1, '4.กิจกรรมเสริมหลักสูตร', '', 101);
+(426, '23212-132', '321331', 2, 1, 1, '4.กิจกรรมเสริมหลักสูตร', '', 101),
+(427, '12345-678', 'หฟกหฟกหฟก', 1, 2, 3, '1.หมวดวิชาสมรรถนะแกนกลาง', '1.1 กลุ่มสมรรถนะภาษาและการสื่อสาร', 101),
+(428, '48495-646', 'เกหนือ', 1, 2, 2, '1.หมวดวิชาสมรรถนะแกนกลาง', '1.2 กลุ่มสมรรถนะการคิดและการแก้ปัญหา', 101),
+(429, '56465-456', 'dsadsadsa', 1, 1, 1, '1.หมวดวิชาสมรรถนะแกนกลาง', '1.3 กลุ่มสมรรถนะสังคมและการดำรงชีวิต', 101);
 
 -- --------------------------------------------------------
 
@@ -1134,13 +1157,22 @@ INSERT INTO `tb_member` (`member_id`, `member_code`, `member_password`, `member_
 
 CREATE TABLE `teacher_info` (
   `teacher_id` int(11) NOT NULL,
-  `prefix` varchar(10) DEFAULT NULL,
+  `prefix` varchar(50) DEFAULT NULL,
   `first_name` varchar(50) DEFAULT NULL,
   `last_name` varchar(50) DEFAULT NULL,
   `department` varchar(100) DEFAULT NULL,
   `email` varchar(100) DEFAULT NULL,
   `phone` varchar(20) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='เก็บข้อมูลครูผู้สอน';
+
+--
+-- Dumping data for table `teacher_info`
+--
+
+INSERT INTO `teacher_info` (`teacher_id`, `prefix`, `first_name`, `last_name`, `department`, `email`, `phone`) VALUES
+(18, 'ว่าที่ร้อย', 'นายสมศักษ์', 'สมหมาย', 'เทคนิคคอมพิวเตอร์', 'undertale4786@gmail.com', '0630903566'),
+(21, 'ว่าที่ร้อยตรี', 'ราชพฤษ์', 'สุโก้ย', 'เทคนิคคอมพิวเตอร์', 'ctnphrae.67@gmail.com', '0630903656'),
+(22, 'ว่าที่ ร.ต.', 'ธวัชชัย สุเขื่อน', 'สุเขื่อนน', 'คอมพิวเตอร์', 'saberluffyza@gmail.com', '0801916520');
 
 --
 -- Indexes for dumped tables
@@ -1217,13 +1249,13 @@ ALTER TABLE `teacher_info`
 -- AUTO_INCREMENT for table `course_information`
 --
 ALTER TABLE `course_information`
-  MODIFY `courseid` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=361;
+  MODIFY `courseid` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=364;
 
 --
 -- AUTO_INCREMENT for table `create_study_table`
 --
 ALTER TABLE `create_study_table`
-  MODIFY `field_id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `field_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
 
 --
 -- AUTO_INCREMENT for table `group_information`
@@ -1241,7 +1273,7 @@ ALTER TABLE `more_plan`
 -- AUTO_INCREMENT for table `room`
 --
 ALTER TABLE `room`
-  MODIFY `room_id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `room_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT for table `study_plans`
@@ -1253,7 +1285,7 @@ ALTER TABLE `study_plans`
 -- AUTO_INCREMENT for table `subject`
 --
 ALTER TABLE `subject`
-  MODIFY `subject_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=427;
+  MODIFY `subject_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=430;
 
 --
 -- AUTO_INCREMENT for table `tb_member`
@@ -1265,7 +1297,7 @@ ALTER TABLE `tb_member`
 -- AUTO_INCREMENT for table `teacher_info`
 --
 ALTER TABLE `teacher_info`
-  MODIFY `teacher_id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `teacher_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=23;
 
 --
 -- Constraints for dumped tables

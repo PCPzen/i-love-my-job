@@ -6,9 +6,10 @@
 require_once dirname(__FILE__) . '/../conn.php';
 
 try {
-    $sql = "SELECT teacher_id, prefix, first_name, last_name, department
-            FROM teacher_info
-            ORDER BY teacher_id DESC";
+    $sql = "SELECT member_id as teacher_id, member_title as prefix, member_firstname as first_name, member_lastname as last_name, 'Department' as department
+            FROM tb_member
+            WHERE member_type = 'teacher'
+            ORDER BY member_firstname ASC";
     $stmt = $conn->prepare($sql);
     $stmt->execute();
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);

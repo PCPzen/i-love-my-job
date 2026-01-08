@@ -4,6 +4,7 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
 export default function HistorySchedule() {
+    const navigate = useNavigate();
     const [historyList, setHistoryList] = useState([]);
     const [selectedSchedule, setSelectedSchedule] = useState(null);
     const [scheduleData, setScheduleData] = useState({});
@@ -201,7 +202,7 @@ export default function HistorySchedule() {
                                 {historyList.map((item, idx) => (
                                     <div
                                         key={`${item.infoid}-${item.term}-${idx}`}
-                                        onClick={() => handleSelectSchedule(item)}
+                                        onClick={() => navigate(`/view-schedule/${item.infoid}/${item.term}?group=${item.group_section || ''}`)}
                                         className="bg-white p-6 rounded-xl shadow-md cursor-pointer hover:shadow-lg hover:scale-105 transition-all border border-gray-100"
                                     >
                                         <div className="flex justify-between items-start mb-4">
