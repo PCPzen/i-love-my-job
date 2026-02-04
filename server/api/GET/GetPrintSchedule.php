@@ -1,56 +1,53 @@
 <?php
+header("Access-Control-Allow-Origin: *");
+header("Content-Type: application/json; charset=UTF-8");
 
+include_once '../conn.php';
 
-if (!isset($_GET['infoid']) || !isset($_GET['term']) || !isset($_GET['year'])) {
+$infoid = isset($_GET['infoid']) ? $_GET['infoid'] : null;
+$term = isset($_GET['term']) ? $_GET['term'] : null;
+$year = isset($_GET['year']) ? $_GET['year'] : null;
+
+if (!$infoid || !$term || !$year) {
     echo json_encode(['status' => 'error', 'message' => 'ข้อมูลไม่ครบถ้วน (infoid, term, year)']);
     exit;
 }
 
-$infoid = $_GET['infoid'];
-$term = $_GET['term'];
-$year = $_GET['year'];
-
 try {
-    // Query หลัก: ดึงตารางเรียนตาม infoid (ผ่าน course_information), term, และ year
     $sql = "SELECT 
                 cst.date, 
                 cst.start_time, 
                 cst.end_time,
                 s.course_code, 
                 s.course_name,
-                t.first_name, 
-                t.last_name,
+                te.member_firstname as first_name, 
+                te.member_lastname as last_name,
                 r.room_name
             FROM 
                 create_study_table AS cst
             JOIN 
                 course_information AS ci ON cst.courseid = ci.courseid
-            JOIN 
+            LEFT JOIN 
                 subject AS s ON ci.subject_id = s.subject_id
-            JOIN 
-                teacher_info AS t ON cst.teacher_id = t.teacher_id
-            JOIN 
+            LEFT JOIN 
+                tb_member AS te ON cst.teacher_id = te.member_id
+            LEFT JOIN 
                 room AS r ON cst.room_id = r.room_id
             WHERE 
-                ci.infoid = ? 
-                AND cst.term = ?  -- ใช้ term จาก create_study_table
-                AND ci.year = ?"; // ใช้ year จาก course_information
+                ci.infoid = :infoid 
+                AND cst.term = :term
+                AND ci.year = :year";
 
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("iss", $infoid, $term, $year);
+    $stmt->bindParam(':infoid', $infoid, PDO::PARAM_INT);
+    $stmt->bindParam(':term', $term, PDO::PARAM_STR);
+    $stmt->bindParam(':year', $year, PDO::PARAM_STR);
     $stmt->execute();
-    $result = $stmt->get_result();
-
-    $schedule = [];
-    while ($row = $result->fetch_assoc()) {
-        $schedule[] = $row;
-    }
+    $schedule = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     echo json_encode($schedule);
 
-} catch (Exception $e) {
+} catch (PDOException $e) {
     echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
 }
-
-$conn->close();
 ?>

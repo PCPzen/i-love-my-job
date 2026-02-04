@@ -13,7 +13,8 @@ try {
                 g.group_name, 
                 g.sublevel, 
                 g.year, 
-                t.term
+                t.term,
+                t.group_section
             FROM group_information g
             JOIN course_information c ON g.infoid = c.infoid
             JOIN create_study_table t ON c.courseid = t.courseid

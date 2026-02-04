@@ -121,21 +121,26 @@ export default function ScheduleView() {
                     cell.isBoth = true; // Keep for safety
 
                     // Top Item
-                    cell.top = `${items[0].course_code} ${items[0].course_name}`;
+                    const t1 = items[0].teacher_first_name ? 'อ.' + items[0].teacher_first_name : '';
+                    const g1 = items[0].group_section ? 'ก.' + items[0].group_section : '';
+                    const r1 = items[0].room_name || '';
+                    cell.top = `${items[0].course_code} ${items[0].course_name} ${t1} ${g1} ${r1}`.trim();
                     cell.courseid = items[0].courseid;
-                    cell.teacher = items[0].teacher_first_name; // Use fetched name
+                    cell.teacher = items[0].teacher_first_name;
                     cell.room = items[0].room_name;
-                    cell.topEndPeriod = parseInt(p) + span - 1; // Assume same span for now
+                    cell.topEndPeriod = parseInt(p) + span - 1;
 
                     // Bottom Item
-                    cell.bottom = `${items[1].course_code} ${items[1].course_name}`;
+                    const t2 = items[1].teacher_first_name ? 'อ.' + items[1].teacher_first_name : '';
+                    const g2 = items[1].group_section ? 'ก.' + items[1].group_section : '';
+                    const r2 = items[1].room_name || '';
+                    cell.bottom = `${items[1].course_code} ${items[1].course_name} ${t2} ${g2} ${r2}`.trim();
                     cell.courseid2 = items[1].courseid;
                     cell.teacher2 = items[1].teacher_first_name;
                     cell.bottomEndPeriod = parseInt(p) + span - 1;
 
-                    // Center - In "Both Timed" usually implies Group or Shared Room
-                    // We will map Group here as it's the most common "Center" element
-                    cell.centralRoom = items[0].group_section ? `ก.${items[0].group_section}` : "";
+                    // Center
+                    cell.centralRoom = items[0].central_room_name || "";
 
                 } else {
                     // Single
@@ -201,15 +206,15 @@ export default function ScheduleView() {
                                         }}
                                     >
                                         <svg width="6" height="6" viewBox="0 0 10 10" className="flex-shrink-0"><path d="M10 0 L0 5 L10 10 Z" fill="black" stroke="none" /></svg>
-                                        <div className="flex-1 border-t border-black h-px"></div>
+                                        <div className="flex-1 border-t border-dashed border-black h-px"></div>
                                         <svg width="6" height="6" viewBox="0 0 10 10" className="flex-shrink-0"><path d="M0 0 L10 5 L0 10 Z" fill="black" stroke="none" /></svg>
                                     </div>
                                 </div>
 
                                 {/* Center Room */}
-                                <div className="flex justify-center items-center text-center w-full leading-none py-1 z-10 bg-white text-[12px] whitespace-nowrap overflow-hidden">
+                                <div className="flex justify-center items-center text-center w-full leading-none z-10 bg-white text-[12px] whitespace-nowrap overflow-hidden">
                                     {cell.centralRoom && (
-                                        <span className="text-[10px] font-normal whitespace-nowrap overflow-hidden px-1">
+                                        <span className="font-normal whitespace-normal break-words leading-none px-1" style={{ fontSize: "10px" }}>
                                             {cell.centralRoom}
                                         </span>
                                     )}
@@ -224,7 +229,7 @@ export default function ScheduleView() {
                                         }}
                                     >
                                         <svg width="6" height="6" viewBox="0 0 10 10" className="flex-shrink-0"><path d="M10 0 L0 5 L10 10 Z" fill="black" stroke="none" /></svg>
-                                        <div className="flex-1 border-t border-black h-px"></div>
+                                        <div className="flex-1 border-t border-dashed border-black h-px"></div>
                                         <svg width="6" height="6" viewBox="0 0 10 10" className="flex-shrink-0"><path d="M0 0 L10 5 L0 10 Z" fill="black" stroke="none" /></svg>
                                     </div>
                                 </div>

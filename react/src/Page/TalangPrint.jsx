@@ -58,11 +58,11 @@ export default function TalangPrint() {
         setPlans(planRes.data || []);
 
         // แปลงเวลาเป็น Int เพื่อเทียบกับ DB
-        const slotsWithIntTime = timeRes.data.map(slot => ({
+        const slotsWithIntTime = Array.isArray(timeRes.data) ? timeRes.data.map(slot => ({
           ...slot,
           start_time_int: parseInt(slot.start_time.replace(':', ''), 10)
-        }));
-        setTimeslots(slotsWithIntTime || []);
+        })) : [];
+        setTimeslots(slotsWithIntTime);
 
       } catch (e) {
         console.error("Failed to fetch initial data", e);

@@ -17,6 +17,7 @@ export default function ScheduleHistory() {
     const fetchHistory = async () => {
         try {
             const res = await api.get("/api/GET/GetScheduleHistory.php");
+            console.log("DEBUG: Schedule History List:", res.data);
             if (Array.isArray(res.data)) {
                 setHistory(res.data);
                 setFiltered(res.data);

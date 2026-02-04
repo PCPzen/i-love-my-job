@@ -2,10 +2,15 @@ import React, { useState, useEffect } from "react";
 import Sidebar from "../components/Sidebar";
 import { getTeachers, getRooms, getGroupInformation, getCourseInfo } from "../services/getService";
 import Swal from 'sweetalert2';
-import { Save, Trash2 } from 'lucide-react';
+import { Save, Trash2, ArrowLeft } from 'lucide-react'; // Added ArrowLeft
+import { useLocation, useNavigate } from "react-router-dom"; // Added hooks
+import axios from 'axios';
 
 // วันหลัก
 const DAYS = ["จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์"];
+
+// API Helpers
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost/i-love-my-job-main/server';
 
 // ช่วงคาบตามเอกสารจริง (เก็บไว้เป็น Preset)
 // ปรับปรุงใหม่: ใช้รูปแบบมาตรฐานเดียวกันทุกวัน
@@ -19,13 +24,17 @@ const STANDARD_BLOCKS = [
     { start: 9, end: 10, label: "คาบ 9-10" },
 ];
 
+// Time Map for Reverse Logic (Time -> Period)
+const TIME_TO_PERIOD = {
+    800: 1, 900: 2, 1000: 3, 1100: 4, 1200: 5, // Lunch gap usually 12-13? 
+    1300: 5, 1400: 6, 1500: 7, 1600: 8, 1700: 9, 1800: 10
+};
+
 // สร้าง schedule ว่าง
 function createEmptySchedule() {
     const result = {};
     for (const day of DAYS) {
         result[day] = {};
-        // ไม่ต้อง Pre-fill ตาม BLOCK_CONFIG แล้ว เพราะเราจะ Render แบบ Dynamic
-        // แต่ถ้าอยากให้มี Default ตาม Config ก็ทำได้ แต่ในที่นี้เอาแบบว่างๆ แล้วให้ User กรอก หรือใช้ Preset เอา
     }
     return result;
 }
@@ -42,7 +51,15 @@ const loadState = (key, defaultValue) => {
 };
 
 export default function ScheduleCreate() {
-    // Header info (Load from localStorage)
+    const location = useLocation();
+    const navigate = useNavigate();
+    const query = new URLSearchParams(location.search);
+    const isEditMode = query.get("mode") === "edit";
+    const editInfoid = query.get("infoid");
+    const editTerm = query.get("term");
+    const editGroup = query.get("group");
+
+    // Header info (Load from localStorage OR from Edit Params)
     const [headerInfo, setHeaderInfo] = useState(() =>
         loadState("talang_headerInfo", {
             level: "ปวช.3",
@@ -51,48 +68,239 @@ export default function ScheduleCreate() {
             studentCount: "",
             term: "2",
             year: "2568",
-            infoid: "", // Add infoid
+            infoid: "",
         })
     );
 
-    // ตาราง dynamic (Load from localStorage)
+    // ตาราง dynamic
     const [schedule, setSchedule] = useState(() =>
         loadState("talang_schedule", createEmptySchedule())
     );
+    const [fontOffsets, setFontOffsets] = useState({ top: 0, bottom: 0 }); // Independent Font Offsets
+    const [activeFontTarget, setActiveFontTarget] = useState('top'); // 'top' or 'bottom'
 
     // เพิ่ม State สำหรับเก็บข้อมูลครูและห้อง
     const [teacherList, setTeacherList] = useState([]);
     const [roomList, setRoomList] = useState([]);
-    const [studyPlans, setStudyPlans] = useState([]); // Store fetched plans
-    const [availableSubjects, setAvailableSubjects] = useState([]); // Subjects from selected plan
+    const [studyPlans, setStudyPlans] = useState([]);
+    const [availableSubjects, setAvailableSubjects] = useState([]);
 
-    // Fetch Teachers, Rooms, and Plans on mount
+    // Fetch Initial Data (Teachers, Rooms, Plans) AND Edit Data
     useEffect(() => {
         const fetchResources = async () => {
             try {
-                // Fetch Teachers
-                const teachers = await getTeachers();
-                if (Array.isArray(teachers)) {
-                    setTeacherList(teachers);
+                // Fetch Resources
+                const [teachers, rooms, plans] = await Promise.all([
+                    getTeachers(),
+                    getRooms(),
+                    getGroupInformation()
+                ]);
+
+                if (Array.isArray(teachers)) setTeacherList(teachers);
+                if (Array.isArray(rooms)) setRoomList(rooms);
+                if (Array.isArray(plans)) setStudyPlans(plans);
+
+                // If Edit Mode, Fetch Schedule Data
+                if (isEditMode && editInfoid && editTerm) {
+                    await fetchEditData(editInfoid, editTerm, editGroup, teachers, rooms);
                 }
 
-                // Fetch Rooms
-                const rooms = await getRooms();
-                if (Array.isArray(rooms)) {
-                    setRoomList(rooms);
-                }
-
-                // Fetch Study Plans
-                const plans = await getGroupInformation();
-                if (Array.isArray(plans)) {
-                    setStudyPlans(plans);
-                }
             } catch (err) {
                 console.error("Error fetching resources:", err);
             }
         };
         fetchResources();
-    }, []);
+    }, [isEditMode, editInfoid, editTerm, editGroup]);
+
+    // Function to load existing schedule into state
+    const fetchEditData = async (infoid, term, group, teachers, rooms) => {
+        try {
+            const res = await axios.get(`${API_BASE}/api/GET/GetScheduleByInfo.php?infoid=${infoid}&term=${term}&group=${encodeURIComponent(group || '')}`);
+
+            if (res.data) {
+                console.log("DEBUG: FetchEditData Response:", res.data);  // Added Log
+                // 1. Set Header Info
+                const h = res.data.header_info;
+                if (h) {
+                    setHeaderInfo({
+                        level: h.sublevel,
+                        department: h.department || "", // Not available in DB yet
+                        group: h.group_section || group || h.group_name,
+                        studentCount: h.student_count || "",
+                        term: h.term || term,
+                        year: h.year,
+                        infoid: infoid
+                    });
+                }
+
+                // 2. Map Schedule Data to Editor Format
+                const scData = res.data.schedule || [];
+                const newSchedule = createEmptySchedule();
+
+                // Group by Day -> StartTime
+                const grouped = {};
+                scData.forEach(item => {
+                    const key = `${item.date}-${item.start_time}`;
+                    if (!grouped[key]) grouped[key] = [];
+                    grouped[key].push(item);
+                });
+
+                Object.keys(grouped).forEach(key => {
+                    const items = grouped[key];
+                    const firstItem = items[0];
+                    const day = firstItem.date;
+
+                    // Map Time to Period
+                    // Note: API returns Int (e.g. 800)
+                    // We need to map 800 -> 1, 900 -> 2...
+                    // Start logic:
+                    // Map Time to Period
+                    // Note: API returns Int (e.g. 800)
+                    // map time to period
+                    let startP = TIME_TO_PERIOD[firstItem.start_time] || 1;
+
+                    // Duration logic for First Item
+                    const duration1 = (firstItem.end_time - firstItem.start_time) / 100;
+                    let endP = startP + duration1 - 1;
+
+                    // Helper for Teacher Name
+                    const getTName = (item) => item.teacher_first_name ? `${item.teacher_first_name} ${item.teacher_last_name || ''}`.trim() : "";
+
+                    // Item 1 Data
+                    const sc1 = firstItem.course_code || "";
+                    const sn1 = firstItem.course_name || "";
+                    const r1 = firstItem.room_name || "";
+                    const t1Name = getTName(firstItem);
+                    // Use item_group if available (new logic), else fallback to group_section
+                    const g1 = firstItem.item_group || firstItem.group_section || "";
+                    const centralId = firstItem.central_room || "";
+                    const centralName = firstItem.central_room_name || "";
+
+                    // Prepare Cell Data
+                    const cell = {
+                        start: startP,
+                        end: endP,
+                        position: items.length > 1 ? "both" : "top",
+
+                        // Core Data
+                        subjectCode: sc1,
+                        subjectName: sn1,
+                        detail: r1,
+                        teacher: firstItem.teacher_id,
+                        courseid: firstItem.courseid,
+                        group: g1,
+                        centralRoom: centralName,
+
+                        // Display Data
+                        top: `${sc1} ${sn1}`.trim(),
+                        bottom: `${r1} ${t1Name ? 'อ.' + t1Name : ''}`.trim(),
+
+                        // Raw Data for Editor
+                        raw: {
+                            day: day,
+                            start: startP,
+                            end: endP,
+                            position: "top", // Will accept update below
+                            subjectCode: sc1,
+                            subjectName: sn1,
+                            detail: r1,
+                            teacher: firstItem.teacher_id,
+                            courseid: firstItem.courseid,
+                            group: g1,
+                            topEndPeriod: endP, // Default to same end
+                            centralRoom: centralId,
+
+                            // 2nd Item Defaults
+                            subjectCode2: "",
+                            subjectName2: "",
+                            detail2: "",
+                            teacher2: "",
+                            courseid2: "",
+                            group2: "",
+                            bottomEndPeriod: endP
+                        }
+                    };
+
+                    // Handle Second Item (if any)
+                    if (items.length > 1) {
+                        const secondItem = items[1];
+                        const sc2 = secondItem.course_code || "";
+                        const sn2 = secondItem.course_name || "";
+                        const r2 = secondItem.room_name || "";
+                        const t2Name = getTName(secondItem);
+                        const g2 = secondItem.item_group || secondItem.group_section || "";
+
+                        // Duration logic for Second Item
+                        const duration2 = (secondItem.end_time - secondItem.start_time) / 100;
+                        const endP2 = startP + duration2 - 1;
+
+                        // Check if it's "Both Timed"
+                        // Force isBothTimed if centralRoom exists OR durations differ
+                        const isTimed = duration1 !== duration2 || !!centralId;
+                        const pos = isTimed ? "both_timed" : "both";
+
+                        // Update Max End Period for the cell wrapper
+                        if (endP2 > endP) {
+                            cell.end = endP2;
+                            cell.raw.end = endP2;
+                            endP = endP2; // Update local var for consistency
+                        }
+
+                        cell.position = pos;
+                        cell.raw.position = pos;
+
+                        cell.subjectCode2 = sc2;
+                        cell.subjectName2 = sn2;
+                        cell.detail2 = r2;
+                        cell.teacher2 = secondItem.teacher_id;
+                        cell.courseid2 = secondItem.courseid;
+                        cell.group2 = g2;
+                        cell.isBothTimed = isTimed;
+                        if (isTimed) cell.isBoth = false; else cell.isBoth = true;
+
+                        // Update Raw for Editor
+                        cell.raw.subjectCode2 = sc2;
+                        cell.raw.subjectName2 = sn2;
+                        cell.raw.detail2 = r2;
+                        cell.raw.teacher2 = secondItem.teacher_id;
+                        cell.raw.courseid2 = secondItem.courseid;
+                        cell.raw.group2 = g2;
+
+                        // Set timed periods for editor
+                        cell.raw.topEndPeriod = startP + duration1 - 1;
+                        cell.raw.bottomEndPeriod = endP2;
+
+                        // Update Display
+                        if (isTimed) {
+                            // Both Timed: แยกข้อมูลบน/ล่าง ชัดเจน
+                            cell.top = `${sc1} ${sn1} ${t1Name ? 'อ.' + t1Name : ''} ${g1 ? 'ก.' + g1 : ''} ${r1}`.trim();
+                            cell.bottom = `${sc2} ${sn2} ${t2Name ? 'อ.' + t2Name : ''} ${g2 ? 'ก.' + g2 : ''} ${r2}`.trim();
+                        } else {
+                            // Both (Same Time): รวมข้อมูลโดยใช้ /
+                            cell.top = `${sc1} ${sn1} / ${sc2} ${sn2}`;
+                            cell.bottom = `${r1} ${t1Name ? 'อ.' + t1Name : ''} / ${r2} ${t2Name ? 'อ.' + t2Name : ''}`;
+                        }
+                    } else {
+                        // Single Item
+                        cell.raw.position = "top";
+                    }
+
+                    // Assign to Schedule State
+                    newSchedule[day][startP] = cell;
+
+                    // Mark subsequent slots as "occupied" if needed? 
+                    // The editor logic deletes overlaps on save, but relies on key existence for rendering.
+                    // We only set the START key.
+                });
+
+                setSchedule(newSchedule);
+            }
+        } catch (err) {
+            console.error("Failed to load edit data", err);
+            Swal.fire("Error", "โหลดข้อมูลตารางเรียนไม่สำเร็จ", "error");
+        }
+    };
+
 
     // wizard จัดตาราง
     const [step, setStep] = useState(1);
@@ -116,14 +324,15 @@ export default function ScheduleCreate() {
     });
 
 
-    // Save to localStorage on change
+    // Save to localStorage on change (SKIP IF EDIT MODE to avoid overwriting creation draft)
     useEffect(() => {
-        localStorage.setItem("talang_headerInfo", JSON.stringify(headerInfo));
-    }, [headerInfo]);
+        if (!isEditMode) localStorage.setItem("talang_headerInfo", JSON.stringify(headerInfo));
+    }, [headerInfo, isEditMode]);
 
     useEffect(() => {
-        localStorage.setItem("talang_schedule", JSON.stringify(schedule));
-    }, [schedule]);
+        if (!isEditMode) localStorage.setItem("talang_schedule", JSON.stringify(schedule));
+    }, [schedule, isEditMode]);
+
 
     // สำหรับอัปเดต start/end ให้ตรงวันเวลาเปลี่ยน
     const syncBlockWithDay = (newDay) => {
@@ -226,6 +435,16 @@ export default function ScheduleCreate() {
 
     // บันทึกข้อมูลลง schedule
     const handleSaveToSchedule = () => {
+        // Validation: Must select course (Prevent Manual Typing without ID)
+        if (!editor.courseid) {
+            Swal.fire('ข้อผิดพลาด', 'กรุณาเลือกรายวิชาจากรายการตัวเลือกเท่านั้น (ห้ามพิมพ์เอง)', 'warning');
+            return;
+        }
+        if ((editor.position === 'both' || editor.position === 'both_timed') && !editor.courseid2) {
+            Swal.fire('ข้อผิดพลาด', 'กรุณาเลือกรายวิชาสำหรับส่วนที่ 2 จากรายการตัวเลือกเท่านั้น', 'warning');
+            return;
+        }
+
         // Helpers for converting IDs to Names
         const getTeacherName = (id) => {
             if (!id) return "";
@@ -296,6 +515,11 @@ export default function ScheduleCreate() {
             } else if (editor.position === "both") {
                 // กรณี ทั้งบนและล่าง: แยกคนละวิชา
                 cell.top = fullText1;
+                cell.isBoth = true;
+                cell.courseid = editor.courseid || "";
+                cell.courseid2 = editor.courseid2 || "";
+                cell.group = editor.group || "";
+                cell.group2 = editor.group2 || "";
 
                 // ชุดที่ 2
                 const text2Line1 = `${editor.subjectCode2 || ""} ${editor.subjectName2 || ""}`.trim();
@@ -312,6 +536,7 @@ export default function ScheduleCreate() {
                 const topText = `${editor.subjectCode || ""} ${editor.subjectName || ""}`.trim();
                 cell.top = topText;
                 cell.courseid = editor.courseid || ""; // Save courseid
+                cell.group = editor.group || "";
 
                 // เก็บข้อมูลแยกสำหรับ CTN layout
                 cell.isCTN = true;
@@ -335,6 +560,7 @@ export default function ScheduleCreate() {
                     // สามัญ: ห้อง/ครู/กลุ่มรวมกันทางขวา
                     cell.top = topText;
                     cell.courseid = editor.courseid || ""; // Save courseid
+                    cell.group = editor.group || "";
                     cell.isSamarn = true;
                     cell.room = ""; // ไม่แสดงห้องทางซ้าย
 
@@ -358,6 +584,7 @@ export default function ScheduleCreate() {
                     cell.group = editor.group || "";
                     cell.teacher = getTeacherName(editor.teacher) || "";
                     cell.room = getRoomName(editor.detail) || "";
+                    cell.courseid = editor.courseid || "";
 
                     // เก็บ top/bottom สำหรับ fallback
                     cell.top = editor.subjectCode || "";
@@ -471,7 +698,7 @@ export default function ScheduleCreate() {
                 };
 
                 // Helper to push item (parse IDs from cell/raw)
-                const pushItem = (cid, tid, rid, start, end) => {
+                const pushItem = (cid, tid, rid, start, end, grp, central) => {
                     if (!cid) return; // Skip if no subject
                     payload.push({
                         ...baseItem,
@@ -479,7 +706,9 @@ export default function ScheduleCreate() {
                         teacher_id: tid,
                         room_id: rid,
                         start_period: parseInt(start),
-                        end_period: parseInt(end)
+                        end_period: parseInt(end),
+                        group_section: grp || headerInfo.group, // Use item group or fallback
+                        central_room: central || null // Send central room ID
                     });
                 };
 
@@ -488,20 +717,20 @@ export default function ScheduleCreate() {
 
                 if (cell.isBothTimed) {
                     // Top
-                    pushItem(cell.courseid, raw.teacher, raw.detail, cell.start || startPeriod, cell.topEndPeriod || cell.end);
+                    pushItem(cell.courseid, raw.teacher, raw.detail, cell.start || startPeriod, cell.topEndPeriod || cell.end, cell.group, raw.centralRoom);
                     // Bottom
-                    pushItem(cell.courseid2, raw.teacher2, raw.detail2, cell.start || startPeriod, cell.bottomEndPeriod || cell.end);
+                    pushItem(cell.courseid2, raw.teacher2, raw.detail2, cell.start || startPeriod, cell.bottomEndPeriod || cell.end, cell.group2, raw.centralRoom);
                 } else if (cell.isBoth) {
                     // Top
-                    pushItem(cell.courseid, raw.teacher, raw.detail, cell.start || startPeriod, cell.end);
+                    pushItem(cell.courseid, raw.teacher, raw.detail, cell.start || startPeriod, cell.end, cell.group);
                     // Bottom
-                    pushItem(cell.courseid2, raw.teacher2, raw.detail2, cell.start || startPeriod, cell.end);
+                    pushItem(cell.courseid2, raw.teacher2, raw.detail2, cell.start || startPeriod, cell.end, cell.group2);
                 } else if (cell.isCTN) {
                     // CTN Layout
-                    pushItem(cell.courseid, raw.teacher, raw.detail, cell.start || startPeriod, cell.end);
+                    pushItem(cell.courseid, raw.teacher, raw.detail, cell.start || startPeriod, cell.end, cell.group);
                 } else {
                     // Single / Normal / Top / Bottom (Standard)
-                    pushItem(cell.courseid, raw.teacher, raw.detail, cell.start || startPeriod, cell.end);
+                    pushItem(cell.courseid, raw.teacher, raw.detail, cell.start || startPeriod, cell.end, cell.group);
                 }
             }
         }
@@ -516,7 +745,11 @@ export default function ScheduleCreate() {
                     schedule: payload,
                     term: headerInfo.term,
                     group: headerInfo.group,
-                    studentCount: headerInfo.studentCount
+                    studentCount: headerInfo.studentCount,
+                    // New Fields for Updating Group Info
+                    year: headerInfo.year,
+                    sublevel: headerInfo.level,
+                    department: headerInfo.department
                 })
             });
             const data = await res.json();
@@ -527,6 +760,8 @@ export default function ScheduleCreate() {
                     text: 'ข้อมูลตารางเรียนถูกบันทึกลงฐานข้อมูลแล้ว',
                     timer: 2000,
                     showConfirmButton: false
+                }).then(() => {
+                    navigate("/history-schedule");
                 });
             } else {
                 Swal.fire({
@@ -595,26 +830,33 @@ export default function ScheduleCreate() {
     // Helper render ช่วงเวลา
     const renderPeriodRange = (day, startPeriod, endPeriod) => {
         // Helper function to scale text based on length
-        const getScaleClass = (text, span = 1) => {
-            if (!text) return "text-[16px] whitespace-nowrap overflow-hidden";
+        const getScaleClass = (text, span = 1, bold = false, target = 'top') => {
+            const currentOffset = fontOffsets[target] || 0;
+            if (!text) return { className: "whitespace-normal break-words overflow-visible", style: { fontSize: "16px" } };
             const len = text.length;
             const adjustedLen = len / span;
 
-            // "Longer = Expands": Allow text to grow if there is space (Low adjustedLen)
-            if (adjustedLen < 2) return "text-[24px] font-bold leading-tight whitespace-nowrap overflow-hidden";
-            if (adjustedLen < 4) return "text-[20px] font-bold leading-tight whitespace-nowrap overflow-hidden";
-            if (adjustedLen < 6) return "text-[18px] font-semibold leading-tight whitespace-nowrap overflow-hidden";
+            let size = 14;
+            let weight = "font-normal";
 
-            // Normal range
-            if (adjustedLen < 12) return "text-[16px] whitespace-nowrap overflow-hidden";
+            // "Longer = Expands" logic
+            if (adjustedLen < 2) { size = 24; weight = "font-bold"; }
+            else if (adjustedLen < 4) { size = 20; weight = "font-bold"; }
+            else if (adjustedLen < 6) { size = 18; weight = "font-semibold"; }
+            else if (adjustedLen < 12) { size = 16; weight = "font-normal"; } // Normal
+            // Shrinking
+            else if (adjustedLen > 40) { size = 8; } // Min size increased for readability
+            else if (adjustedLen > 30) { size = 10; }
+            else if (adjustedLen > 22) { size = 11; }
+            else if (adjustedLen > 16) { size = 12; }
 
-            // Shrinking range (Relaxed thresholds)
-            if (adjustedLen > 40) return "text-[6px] leading-tight whitespace-nowrap overflow-hidden";
-            if (adjustedLen > 30) return "text-[8px] leading-tight whitespace-nowrap overflow-hidden";
-            if (adjustedLen > 22) return "text-[10px] leading-tight whitespace-nowrap overflow-hidden";
-            if (adjustedLen > 16) return "text-[12px] leading-tight whitespace-nowrap overflow-hidden";
+            const finalSize = size + currentOffset;
+            const baseClass = "leading-tight whitespace-normal break-words overflow-visible";
 
-            return "text-[14px] leading-tight whitespace-nowrap overflow-hidden";
+            return {
+                className: `${baseClass} ${bold ? 'font-bold' : weight}`,
+                style: { fontSize: `${finalSize}px` }
+            };
         };
         const dayData = schedule[day] || {};
         const cells = [];
@@ -633,7 +875,7 @@ export default function ScheduleCreate() {
                     <td
                         key={`${day}-${current}`}
                         colSpan={span}
-                        className="border border-black p-0 align-top cursor-pointer hover:bg-blue-50 transition-colors h-[70px] max-h-[70px] overflow-hidden whitespace-nowrap"
+                        className="border border-black p-0 align-top cursor-pointer hover:bg-blue-50 transition-colors min-h-[70px] h-auto whitespace-normal break-words"
                         onClick={() => handleCellClick(day, current, cellData)}
                         onContextMenu={(e) => handleCellRightClick(e, day, current, cellData)}
                         title="คลิกซ้าย: แก้ไข | คลิกขวา: ลบ"
@@ -645,7 +887,13 @@ export default function ScheduleCreate() {
                                 <div className="w-full flex-[1.2] flex flex-col justify-center items-center">
                                     {/* รหัสวิชา ตรงกลาง */}
                                     {cellData.subjectCode && (
-                                        <div className={`text-center font-semibold ${getScaleClass(cellData.subjectCode, span)}`}>{cellData.subjectCode}</div>
+                                        <div
+                                            className={`text-center font-semibold ${getScaleClass(cellData.subjectCode, span, false, 'top').className}`}
+                                            style={getScaleClass(cellData.subjectCode, span, false, 'top').style}
+                                            onClick={() => setActiveFontTarget('top')}
+                                        >
+                                            {cellData.subjectCode}
+                                        </div>
                                     )}
                                 </div>
 
@@ -669,13 +917,13 @@ export default function ScheduleCreate() {
                                     {/* ห้อง/ครู (ลำดับต่างตาม type) */}
                                     {cellData.singleType === "single_samarn" ? (
                                         <div className="flex justify-center items-center gap-1 w-full flex-wrap px-1">
-                                            {cellData.room && <div className={getScaleClass(cellData.room, span)}>{cellData.room}</div>}
-                                            {cellData.teacher && <div className={getScaleClass("อ." + cellData.teacher, span)}>อ.{cellData.teacher}</div>}
+                                            {cellData.room && <div className={getScaleClass(cellData.room, span, false, 'bottom').className} style={getScaleClass(cellData.room, span, false, 'bottom').style} onClick={() => setActiveFontTarget('bottom')}>{cellData.room}</div>}
+                                            {cellData.teacher && <div className={getScaleClass("อ." + cellData.teacher, span, false, 'bottom').className} style={getScaleClass("อ." + cellData.teacher, span, false, 'bottom').style} onClick={() => setActiveFontTarget('bottom')}>อ.{cellData.teacher}</div>}
                                         </div>
                                     ) : (
                                         <div className="flex justify-center items-center gap-1 w-full flex-wrap px-1">
-                                            {cellData.teacher && <div className={getScaleClass("อ." + cellData.teacher, span)}>อ.{cellData.teacher}</div>}
-                                            {cellData.room && <div className={getScaleClass(cellData.room, span)}>{cellData.room}</div>}
+                                            {cellData.teacher && <div className={getScaleClass("อ." + cellData.teacher, span, false, 'bottom').className} style={getScaleClass("อ." + cellData.teacher, span, false, 'bottom').style} onClick={() => setActiveFontTarget('bottom')}>อ.{cellData.teacher}</div>}
+                                            {cellData.room && <div className={getScaleClass(cellData.room, span, false, 'bottom').className} style={getScaleClass(cellData.room, span, false, 'bottom').style} onClick={() => setActiveFontTarget('bottom')}>{cellData.room}</div>}
                                         </div>
                                     )}
                                 </div>
@@ -692,7 +940,13 @@ export default function ScheduleCreate() {
                                         }}
                                     >
                                         <div className="w-full overflow-hidden">
-                                            <div className={`w-full text-left whitespace-nowrap text-[12px] leading-tight overflow-hidden`}>{cellData.top}</div>
+                                            <div
+                                                className={`w-full text-left whitespace-nowrap leading-tight overflow-hidden ${getScaleClass(cellData.top, cellData.topEndPeriod - current + 1, false, 'top').className}`}
+                                                style={getScaleClass(cellData.top, cellData.topEndPeriod - current + 1, false, 'top').style}
+                                                onClick={() => setActiveFontTarget('top')}
+                                            >
+                                                {cellData.top}
+                                            </div>
                                         </div>
                                         {/* Vertical Line for Top Section Only */}
                                         {((cellData.topEndPeriod - current + 1) < span) && (
@@ -722,9 +976,9 @@ export default function ScheduleCreate() {
                                 </div>
 
                                 {/* Center Room */}
-                                <div className="flex justify-center items-center text-center w-full leading-none py-1 z-10 bg-white text-[12px] whitespace-nowrap overflow-hidden">
+                                <div className="flex justify-center items-center text-center w-full leading-none z-10 bg-white text-[12px] whitespace-nowrap overflow-hidden">
                                     {cellData.centralRoom && (
-                                        <span className="text-[10px] font-normal whitespace-nowrap overflow-hidden px-1">
+                                        <span className="font-normal whitespace-normal break-words leading-none px-1" style={{ fontSize: "10px" }}>
                                             {cellData.centralRoom}
                                         </span>
                                     )}
@@ -753,7 +1007,13 @@ export default function ScheduleCreate() {
                                         }}
                                     >
                                         <div className="w-full overflow-hidden">
-                                            <div className={`w-full text-left whitespace-nowrap text-[12px] leading-tight overflow-hidden`}>{cellData.bottom}</div>
+                                            <div
+                                                className={`w-full text-left whitespace-nowrap leading-tight overflow-hidden ${getScaleClass(cellData.bottom, cellData.bottomEndPeriod - current + 1, false, 'bottom').className}`}
+                                                style={getScaleClass(cellData.bottom, cellData.bottomEndPeriod - current + 1, false, 'bottom').style}
+                                                onClick={() => setActiveFontTarget('bottom')}
+                                            >
+                                                {cellData.bottom}
+                                            </div>
                                         </div>
                                         {/* Vertical Line for Bottom Section Only */}
                                         {((cellData.bottomEndPeriod - current + 1) < span) && (
@@ -774,7 +1034,7 @@ export default function ScheduleCreate() {
                                 {/* ข้อความด้านบน - ชิดซ้ายด้านบน */}
                                 {hasTop && (
                                     <div className="w-full text-left px-1 pt-1 flex-1 basis-0 flex flex-col justify-center">
-                                        <div className={`${getScaleClass(cellData.top, span)}`}>{cellData.top}</div>
+                                        <div className={`${getScaleClass(cellData.top, span, false, 'top').className}`} style={getScaleClass(cellData.top, span, false, 'top').style} onClick={() => setActiveFontTarget('top')}>{cellData.top}</div>
                                     </div>
                                 )}
 
@@ -782,7 +1042,7 @@ export default function ScheduleCreate() {
                                 {hasTop && hasBottom && (
                                     <div className="w-full flex items-center justify-center my-[2px]">
                                         <svg width="6" height="6" viewBox="0 0 10 10" className="flex-shrink-0"><path d="M10 0 L0 5 L10 10 Z" fill="black" stroke="none" /></svg>
-                                        <div className="flex-1 border-t border-black h-px"></div>
+                                        <div className="flex-1 border-t border-solid border-black h-px"></div>
                                         <svg width="6" height="6" viewBox="0 0 10 10" className="flex-shrink-0"><path d="M0 0 L10 5 L0 10 Z" fill="black" stroke="none" /></svg>
                                     </div>
                                 )}
@@ -791,19 +1051,19 @@ export default function ScheduleCreate() {
                                 {hasBottom && (
                                     cellData.isSamarn ? (
                                         <div className="w-full text-right pl-1 pr-2 pb-0.5 flex-1 basis-0 flex flex-col justify-end items-end">
-                                            <div className={`${getScaleClass(cellData.room + " " + cellData.teacherGroup, span)}`}>
+                                            <div className={`${getScaleClass(cellData.room + " " + cellData.teacherGroup, span, false, 'bottom').className}`} style={getScaleClass(cellData.room + " " + cellData.teacherGroup, span, false, 'bottom').style} onClick={() => setActiveFontTarget('bottom')}>
                                                 {cellData.room} {cellData.teacherGroup}
                                             </div>
                                         </div>
                                     ) : cellData.isCTN ? (
                                         <div className="w-full text-left px-1 pb-1 flex-1 flex flex-col justify-center">
-                                            <div className={`${getScaleClass(cellData.room + " " + cellData.teacherGroup, span)}`}>
+                                            <div className={`${getScaleClass(cellData.room + " " + cellData.teacherGroup, span, false, 'bottom').className}`} style={getScaleClass(cellData.room + " " + cellData.teacherGroup, span, false, 'bottom').style} onClick={() => setActiveFontTarget('bottom')}>
                                                 {cellData.room} {cellData.teacherGroup}
                                             </div>
                                         </div>
                                     ) : (
                                         <div className="w-full text-left px-1 pb-1 flex-1 flex flex-col justify-center">
-                                            <div className={`${getScaleClass(cellData.bottom, span)}`}>{cellData.bottom}</div>
+                                            <div className={`${getScaleClass(cellData.bottom, span, false, 'bottom').className}`} style={getScaleClass(cellData.bottom, span, false, 'bottom').style} onClick={() => setActiveFontTarget('bottom')}>{cellData.bottom}</div>
                                         </div>
                                     )
                                 )}
@@ -846,11 +1106,10 @@ export default function ScheduleCreate() {
                             <div className="flex items-center gap-2">
                                 <button
                                     onClick={handleSaveToDatabase}
-                                    className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded shadow text-sm font-medium transition-colors"
+                                    className={`flex items-center gap-2 ${isEditMode ? 'bg-orange-600 hover:bg-orange-700' : 'bg-green-600 hover:bg-green-700'} text-white px-3 py-1.5 rounded shadow text-sm font-medium transition-colors`}
                                 >
                                     <Save size={16} />
-                                    <Save size={16} />
-                                    บันทึกลง Database
+                                    {isEditMode ? 'บันทึกการแก้ไข' : 'บันทึกลง Database'}
                                 </button>
                                 <button
                                     onClick={handleReset}
@@ -986,6 +1245,43 @@ export default function ScheduleCreate() {
                                     className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500"
                                 />
                             </div>
+                        </div>
+                    </div>
+
+                    {/* Font Control & Header */}
+                    <div className="flex justify-end items-center gap-2 mb-2 print:hidden">
+                        <div className="flex bg-gray-100 rounded p-1 text-sm border border-gray-300">
+                            <button
+                                onClick={() => setActiveFontTarget('top')}
+                                className={`px-2 py-0.5 rounded ${activeFontTarget === 'top' ? 'bg-white shadow text-blue-600 font-bold' : 'text-gray-500 hover:bg-gray-200'}`}
+                            >
+                                ปรับส่วนบน
+                            </button>
+                            <button
+                                onClick={() => setActiveFontTarget('bottom')}
+                                className={`px-2 py-0.5 rounded ${activeFontTarget === 'bottom' ? 'bg-white shadow text-blue-600 font-bold' : 'text-gray-500 hover:bg-gray-200'}`}
+                            >
+                                ปรับส่วนล่าง
+                            </button>
+                        </div>
+                        <div className="flex gap-1">
+                            <button
+                                onClick={() => setFontOffsets(prev => ({ ...prev, [activeFontTarget]: (prev[activeFontTarget] || 0) - 1 }))}
+                                className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1 rounded text-sm w-8"
+                                title="ลดขนาด"
+                            >
+                                -
+                            </button>
+                            <span className="flex items-center justify-center text-sm font-medium w-6 text-center">
+                                {fontOffsets[activeFontTarget] > 0 ? '+' : ''}{fontOffsets[activeFontTarget] || 0}
+                            </span>
+                            <button
+                                onClick={() => setFontOffsets(prev => ({ ...prev, [activeFontTarget]: (prev[activeFontTarget] || 0) + 1 }))}
+                                className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1 rounded text-sm w-8"
+                                title="เพิ่มขนาด"
+                            >
+                                +
+                            </button>
                         </div>
                     </div>
 
@@ -1426,8 +1722,24 @@ export default function ScheduleCreate() {
                                             </div>
 
                                             <div className="grid grid-cols-2 gap-4">
-                                                <div><label className="block mb-1 text-xs font-semibold">รหัสวิชา</label><input name="subjectCode" value={editor.subjectCode} onChange={handleEditorChange} className="w-full border rounded px-2 py-1" /></div>
-                                                <div><label className="block mb-1 text-xs font-semibold">ชื่อวิชา</label><input name="subjectName" value={editor.subjectName} onChange={handleEditorChange} className="w-full border rounded px-2 py-1" /></div>
+                                                <div>
+                                                    <label className="block mb-1 text-xs font-semibold">รหัสวิชา <span className="text-red-500 text-[10px]">(เลือกจากรายการ)</span></label>
+                                                    <input
+                                                        name="subjectCode"
+                                                        value={editor.subjectCode}
+                                                        readOnly
+                                                        className="w-full border border-gray-300 rounded px-2 py-1 bg-gray-100 text-gray-500 cursor-not-allowed"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block mb-1 text-xs font-semibold">ชื่อวิชา</label>
+                                                    <input
+                                                        name="subjectName"
+                                                        value={editor.subjectName}
+                                                        readOnly
+                                                        className="w-full border border-gray-300 rounded px-2 py-1 bg-gray-100 text-gray-500 cursor-not-allowed"
+                                                    />
+                                                </div>
                                                 <div>
                                                     <label className="block mb-1 text-xs font-semibold">ห้อง</label>
                                                     <select name="detail" value={editor.detail} onChange={handleEditorChange} className="w-full border rounded px-2 py-1">
@@ -1450,7 +1762,7 @@ export default function ScheduleCreate() {
                                                 <div className="col-span-2"><label className="block mb-1 text-xs font-semibold text-purple-700">ถึงคาบที่</label><select name="topEndPeriod" value={editor.topEndPeriod || editor.end} onChange={handleEditorChange} className="w-full border rounded px-2 py-1">{Array.from({ length: parseInt(editor.end) - parseInt(editor.start) + 1 }, (_, i) => { const p = parseInt(editor.start) + i; return <option key={p} value={p}>คาบ {p}</option>; })}</select></div>
                                             </div>
                                         </div>
-                                        <div className="py-2 text-center border-b border-dashed">
+                                        <div className="py-2 text-center border-b">
                                             <label className="block mb-1 text-xs font-semibold">ห้องเรียน (ตรงกลาง)</label>
                                             <select name="centralRoom" value={editor.centralRoom} onChange={handleEditorChange} className="w-1/2 mx-auto border rounded px-2 py-1">
                                                 <option value="">-- เลือกห้อง --</option>
@@ -1492,8 +1804,24 @@ export default function ScheduleCreate() {
                                             </div>
 
                                             <div className="grid grid-cols-2 gap-4">
-                                                <div><label className="block mb-1 text-xs font-semibold">รหัสวิชา</label><input name="subjectCode2" value={editor.subjectCode2} onChange={handleEditorChange} className="w-full border rounded px-2 py-1" /></div>
-                                                <div><label className="block mb-1 text-xs font-semibold">ชื่อวิชา</label><input name="subjectName2" value={editor.subjectName2} onChange={handleEditorChange} className="w-full border rounded px-2 py-1" /></div>
+                                                <div>
+                                                    <label className="block mb-1 text-xs font-semibold">รหัสวิชา <span className="text-red-500 text-[10px]">(เลือกจากรายการ)</span></label>
+                                                    <input
+                                                        name="subjectCode2"
+                                                        value={editor.subjectCode2}
+                                                        readOnly
+                                                        className="w-full border border-gray-300 rounded px-2 py-1 bg-gray-100 text-gray-500 cursor-not-allowed"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block mb-1 text-xs font-semibold">ชื่อวิชา</label>
+                                                    <input
+                                                        name="subjectName2"
+                                                        value={editor.subjectName2}
+                                                        readOnly
+                                                        className="w-full border border-gray-300 rounded px-2 py-1 bg-gray-100 text-gray-500 cursor-not-allowed"
+                                                    />
+                                                </div>
                                                 <div>
                                                     <label className="block mb-1 text-xs font-semibold">ห้อง</label>
                                                     <select name="detail2" value={editor.detail2} onChange={handleEditorChange} className="w-full border rounded px-2 py-1">
@@ -1534,26 +1862,26 @@ export default function ScheduleCreate() {
                                                     onChange={(e) => {
                                                         const val = e.target.value;
                                                         if (val) {
-                                                            const [code, name] = val.split("|");
-                                                            setEditor(prev => ({ ...prev, subjectCode: code, subjectName: name }));
+                                                            const [code, name, cid] = val.split("|");
+                                                            setEditor(prev => ({ ...prev, subjectCode: code, subjectName: name, courseid: cid }));
                                                         }
                                                     }}
                                                 >
                                                     <option value="">-- เลือกรายวิชา --</option>
                                                     {availableSubjects.map((subj, i) => (
-                                                        <option key={`top-2-${subj.course_code}-${i}`} value={`${subj.course_code}|${subj.course_name}`}>
+                                                        <option key={`top-2-${subj.course_code}-${i}`} value={`${subj.course_code}|${subj.course_name}|${subj.courseid}`}>
                                                             {subj.course_code} - {subj.course_name}
                                                         </option>
                                                     ))}
                                                 </select>
                                             </div>
                                             <div>
-                                                <label className="block mb-1 text-xs font-semibold pl-1">รหัสวิชา</label>
+                                                <label className="block mb-1 text-xs font-semibold pl-1">รหัสวิชา <span className="text-red-500 text-[10px]">(เลือกจากรายการ)</span></label>
                                                 <input
                                                     name="subjectCode"
                                                     value={editor.subjectCode}
-                                                    onChange={handleEditorChange}
-                                                    className="w-full border border-gray-300 rounded px-2 py-1"
+                                                    readOnly
+                                                    className="w-full border border-gray-300 rounded px-2 py-1 bg-gray-100 text-gray-500 cursor-not-allowed"
                                                 />
                                             </div>
                                             <div>
@@ -1561,8 +1889,8 @@ export default function ScheduleCreate() {
                                                 <input
                                                     name="subjectName"
                                                     value={editor.subjectName}
-                                                    onChange={handleEditorChange}
-                                                    className="w-full border border-gray-300 rounded px-2 py-1"
+                                                    readOnly
+                                                    className="w-full border border-gray-300 rounded px-2 py-1 bg-gray-100 text-gray-500 cursor-not-allowed"
                                                 />
                                             </div>
                                             <div>
@@ -1623,30 +1951,31 @@ export default function ScheduleCreate() {
                                                     onChange={(e) => {
                                                         const val = e.target.value;
                                                         if (val) {
-                                                            const [code, name] = val.split("|");
+                                                            const [code, name, cid] = val.split("|");
                                                             setEditor(prev => ({
                                                                 ...prev,
                                                                 subjectCode2: code,
-                                                                subjectName2: name
+                                                                subjectName2: name,
+                                                                courseid2: cid
                                                             }));
                                                         }
                                                     }}
                                                 >
                                                     <option value="">-- เลือกรายวิชา --</option>
                                                     {availableSubjects.map((subj, i) => (
-                                                        <option key={`bottom-2-${subj.course_code}-${i}`} value={`${subj.course_code}|${subj.course_name}`}>
+                                                        <option key={`bottom-2-${subj.course_code}-${i}`} value={`${subj.course_code}|${subj.course_name}|${subj.courseid}`}>
                                                             {subj.course_code} - {subj.course_name}
                                                         </option>
                                                     ))}
                                                 </select>
                                             </div>
                                             <div>
-                                                <label className="block mb-1 text-xs font-semibold pl-1">รหัสวิชา</label>
+                                                <label className="block mb-1 text-xs font-semibold pl-1">รหัสวิชา <span className="text-red-500 text-[10px]">(เลือกจากรายการ)</span></label>
                                                 <input
                                                     name="subjectCode2"
                                                     value={editor.subjectCode2}
-                                                    onChange={handleEditorChange}
-                                                    className="w-full border border-gray-300 rounded px-2 py-1"
+                                                    readOnly
+                                                    className="w-full border border-gray-300 rounded px-2 py-1 bg-gray-100 text-gray-500 cursor-not-allowed"
                                                 />
                                             </div>
                                             <div>
@@ -1654,8 +1983,8 @@ export default function ScheduleCreate() {
                                                 <input
                                                     name="subjectName2"
                                                     value={editor.subjectName2}
-                                                    onChange={handleEditorChange}
-                                                    className="w-full border border-gray-300 rounded px-2 py-1"
+                                                    readOnly
+                                                    className="w-full border border-gray-300 rounded px-2 py-1 bg-gray-100 text-gray-500 cursor-not-allowed"
                                                 />
                                             </div>
                                             <div>
@@ -1713,13 +2042,13 @@ export default function ScheduleCreate() {
                                             </select>
                                         </div>
                                         <div>
-                                            <label className="block mb-1">รหัสวิชา</label>
+                                            <label className="block mb-1">รหัสวิชา <span className="text-red-500 text-[10px]">(เลือกจากรายการ)</span></label>
                                             <input
                                                 name="subjectCode"
                                                 value={editor.subjectCode}
-                                                onChange={handleEditorChange}
-                                                className="w-full border border-gray-300 rounded px-2 py-1"
-                                                placeholder="เช่น 20128-2113"
+                                                readOnly
+                                                className="w-full border border-gray-300 rounded px-2 py-1 bg-gray-100 text-gray-500 cursor-not-allowed"
+                                                placeholder="เลือกจาก Auto Fill"
                                             />
                                         </div>
                                         <div>
@@ -1727,9 +2056,9 @@ export default function ScheduleCreate() {
                                             <input
                                                 name="subjectName"
                                                 value={editor.subjectName}
-                                                onChange={handleEditorChange}
-                                                className="w-full border border-gray-300 rounded px-2 py-1"
-                                                placeholder="เช่น ระบบเครือข่ายคอมพิวเตอร์เบื้องต้น"
+                                                readOnly
+                                                className="w-full border border-gray-300 rounded px-2 py-1 bg-gray-100 text-gray-500 cursor-not-allowed"
+                                                placeholder="เลือกจาก Auto Fill"
                                             />
                                         </div>
                                         <div>
@@ -1780,19 +2109,19 @@ export default function ScheduleCreate() {
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-amber-50 p-4 border rounded">
                                         <div className="md:col-span-2 mb-2 bg-white p-2 rounded border border-amber-200">
                                             <label className="block text-xs font-bold text-gray-700 mb-1">Auto Fill: {availableSubjects.length > 0 && <span className="text-green-600 font-normal ml-2">({availableSubjects.length})</span>}</label>
-                                            <select className="w-full border rounded px-2 py-1 text-xs" onChange={(e) => { const val = e.target.value; if (val) { const [code, name] = val.split("|"); setEditor(prev => ({ ...prev, subjectCode: code, subjectName: name })); } }}>
+                                            <select className="w-full border rounded px-2 py-1 text-xs" onChange={(e) => { const val = e.target.value; if (val) { const [code, name, cid] = val.split("|"); setEditor(prev => ({ ...prev, subjectCode: code, subjectName: name, courseid: cid })); } }}>
                                                 <option value="">-- เลือกรายวิชา --</option>
-                                                {availableSubjects.map((subj, i) => (<option key={`single-${subj.course_code}-${i}`} value={`${subj.course_code}|${subj.course_name}`}>{subj.course_code} - {subj.course_name}</option>))}
+                                                {availableSubjects.map((subj, i) => (<option key={`single-${subj.course_code}-${i}`} value={`${subj.course_code}|${subj.course_name}|${subj.courseid}`}>{subj.course_code} - {subj.course_name}</option>))}
                                             </select>
                                         </div>
                                         <div>
-                                            <label className="block mb-1 font-semibold">รหัสวิชา</label>
+                                            <label className="block mb-1 font-semibold">รหัสวิชา <span className="text-red-500 text-[10px]">(เลือกจากรายการ)</span></label>
                                             <input
                                                 name="subjectCode"
                                                 value={editor.subjectCode}
-                                                onChange={handleEditorChange}
-                                                className="w-full border border-gray-300 rounded px-2 py-1"
-                                                placeholder="เช่น 20128-2113"
+                                                readOnly
+                                                className="w-full border border-gray-300 rounded px-2 py-1 bg-gray-100 text-gray-500 cursor-not-allowed"
+                                                placeholder="เลือกจาก Auto Fill"
                                             />
                                         </div>
                                         <div>
@@ -1858,13 +2187,13 @@ export default function ScheduleCreate() {
                                             </select>
                                         </div>
                                         <div>
-                                            <label className="block mb-1">รหัสวิชา</label>
+                                            <label className="block mb-1">รหัสวิชา <span className="text-red-500 text-[10px]">(เลือกจากรายการ)</span></label>
                                             <input
                                                 name="subjectCode"
                                                 value={editor.subjectCode}
-                                                onChange={handleEditorChange}
-                                                className="w-full border border-gray-300 rounded px-2 py-1"
-                                                placeholder="เช่น 20128-2113"
+                                                readOnly
+                                                className="w-full border border-gray-300 rounded px-2 py-1 bg-gray-100 text-gray-500 cursor-not-allowed"
+                                                placeholder="เลือกจาก Auto Fill"
                                             />
                                         </div>
                                         <div>
@@ -1872,9 +2201,9 @@ export default function ScheduleCreate() {
                                             <input
                                                 name="subjectName"
                                                 value={editor.subjectName}
-                                                onChange={handleEditorChange}
-                                                className="w-full border border-gray-300 rounded px-2 py-1"
-                                                placeholder="เช่น ระบบเครือข่ายคอมพิวเตอร์เบื้องต้น"
+                                                readOnly
+                                                className="w-full border border-gray-300 rounded px-2 py-1 bg-gray-100 text-gray-500 cursor-not-allowed"
+                                                placeholder="เลือกจาก Auto Fill"
                                             />
                                         </div>
                                         <div>

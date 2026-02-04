@@ -26,6 +26,7 @@ try {
     // 2. Fetch Schedule Data
     $sql = "SELECT 
                 t.*,
+                t.item_group,
                 s.course_code,
                 s.course_name,
                 s.theory as theory_practice_l,
@@ -33,21 +34,43 @@ try {
                 s.credit,
                 te.member_firstname as teacher_first_name,
                 te.member_lastname as teacher_last_name,
-                r.room_name
+                r.room_name,
+                cr.room_name as central_room_name
             FROM create_study_table t
             JOIN course_information c ON t.courseid = c.courseid
             LEFT JOIN subject s ON c.subject_id = s.subject_id
             LEFT JOIN tb_member te ON t.teacher_id = te.member_id
             LEFT JOIN room r ON t.room_id = r.room_id
-            WHERE c.infoid = :infoid AND t.term = :term AND t.group_section = :group
-            ORDER BY FIELD(t.date, 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์'), t.start_time ASC";
+            LEFT JOIN room cr ON t.central_room = cr.room_id
+            WHERE c.infoid = :infoid AND t.term = :term";
+
+    if ($group !== '') {
+        $sql .= " AND t.group_section = :group";
+    }
+
+    $sql .= "
+             ORDER BY FIELD(t.date, 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์'), t.start_time ASC";
 
     $stmt = $conn->prepare($sql);
     $stmt->bindParam(':infoid', $infoid, PDO::PARAM_INT);
     $stmt->bindParam(':term', $term, PDO::PARAM_STR);
-    $stmt->bindParam(':group', $group, PDO::PARAM_STR);
+    if ($group !== '') {
+        $stmt->bindParam(':group', $group, PDO::PARAM_STR);
+    }
     $stmt->execute();
     $schedule_data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $group_section = $group;
+    if ($group_section === '' && !empty($schedule_data) && isset($schedule_data[0]['group_section'])) {
+        $group_section = (string) $schedule_data[0]['group_section'];
+    }
+
+    if (!$header_info) {
+        $header_info = [];
+    }
+
+    $header_info['term'] = $term;
+    $header_info['group_section'] = $group_section;
 
     // Return combined result
     echo json_encode([
@@ -58,4 +81,3 @@ try {
 } catch (PDOException $e) {
     echo json_encode(['error' => $e->getMessage()]);
 }
-?>

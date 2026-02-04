@@ -1,4 +1,7 @@
 <?php
+/**
+ * @var PDO $conn
+ */
 header("Access-Control-Allow-Origin: *");
 header("Content-Type: application/json; charset=UTF-8");
 header("Access-Control-Allow-Methods: POST");
@@ -6,7 +9,20 @@ header("Access-Control-Allow-Headers: Content-Type, Access-Control-Allow-Headers
 
 include_once '../conn.php';
 
+// Start Logging
+error_log('SaveTotalSchedule.php - เริ่มทำงาน');
+
+/** @var object|null $data */
 $data = json_decode(file_get_contents("php://input"));
+error_log('ได้รับข้อมูล JSON: ' . json_encode([
+    'has_infoid' => isset($data->infoid),
+    'has_schedule' => isset($data->schedule),
+    'infoid' => isset($data->infoid) ? $data->infoid : 'NULL',
+    'term' => isset($data->term) ? $data->term : 'NULL',
+    'group' => isset($data->group) ? $data->group : 'NULL',
+    'schedule_count' => isset($data->schedule) ? count($data->schedule) : 0,
+    'raw_input_length' => strlen(file_get_contents("php://input"))
+]));
 
 if (!isset($data->infoid) || !isset($data->schedule)) {
     echo json_encode(['status' => 'error', 'message' => 'ข้อมูลไม่ครบถ้วน (infoid or schedule missing)']);
@@ -19,20 +35,39 @@ $term = isset($data->term) ? $data->term : '';
 $group = isset($data->group) ? $data->group : ''; // Get group info
 
 try {
+    /** @var PDO $conn */
     $conn->beginTransaction();
 
-    // 0. Update Student Count in group_information (if provided)
+    // 0. Update Group Information (Student Count, Year, Term, Group Name)
     $studentCount = isset($data->studentCount) ? $data->studentCount : null;
-    if ($studentCount !== null) {
-        $sql_update_count = "UPDATE group_information SET student_id = :count WHERE infoid = :infoid";
-        $stmt_update = $conn->prepare($sql_update_count);
-        $stmt_update->bindParam(':count', $studentCount, PDO::PARAM_STR);
-        $stmt_update->bindParam(':infoid', $infoid, PDO::PARAM_INT);
-        $stmt_update->execute();
+    $newYear = isset($data->year) ? $data->year : null;
+    $newLevel = isset($data->sublevel) ? $data->sublevel : null;
+    $newGroupName = isset($data->group) ? $data->group : null;
+
+    if ($studentCount !== null || $newYear || $newLevel) {
+        // Build dynamic update
+        $fields = [];
+        $params = [':infoid' => $infoid];
+
+        if ($studentCount !== null) { $fields[] = "student_id = :count"; $params[':count'] = $studentCount; }
+        if ($newYear) { $fields[] = "year = :year"; $params[':year'] = $newYear; }
+        if ($newLevel) { $fields[] = "sublevel = :level"; $params[':level'] = $newLevel; }
+        if ($newGroupName) { $fields[] = "group_name = :gname"; $params[':gname'] = $newGroupName; }
+
+        if (!empty($fields)) {
+            $sql_update_info = "UPDATE group_information SET " . implode(', ', $fields) . " WHERE infoid = :infoid";
+            /** @var PDOStatement $stmt_update */
+            $stmt_update = $conn->prepare($sql_update_info);
+            foreach ($params as $k => $v) {
+                $stmt_update->bindValue($k, $v);
+            }
+            $stmt_update->execute();
+        }
     }
 
     // 1. Clear existing schedule for this Plan (infoid) AND Group Section
     $sql_get_courses = "SELECT courseid FROM course_information WHERE infoid = :infoid";
+    /** @var PDOStatement $stmt_get_courses */
     $stmt_get_courses = $conn->prepare($sql_get_courses);
     $stmt_get_courses->bindParam(':infoid', $infoid, PDO::PARAM_INT);
     $stmt_get_courses->execute();
@@ -60,8 +95,9 @@ try {
 
     // 2. Insert new schedule items
     $sql_insert = "INSERT INTO create_study_table 
-                   (courseid, teacher_id, room_id, `date`, start_time, end_time, term, group_section) 
-                   VALUES (:courseid, :teacher_id, :room_id, :date, :start_time, :end_time, :term, :group_section)";
+                   (courseid, teacher_id, room_id, `date`, start_time, end_time, term, group_section, item_group, central_room) 
+                   VALUES (:courseid, :teacher_id, :room_id, :date, :start_time, :end_time, :term, :group_section, :item_group, :central_room)";
+    /** @var PDOStatement $stmt_insert */
     $stmt_insert = $conn->prepare($sql_insert);
 
     // Standard Time Mapping (Period -> StartTime, EndTime)
@@ -81,12 +117,15 @@ try {
     ];
 
     $skipped = 0;
+    $skipped_course = 0;
     $debug_log = [];
 
     foreach ($schedule as $index => $item) {
         // Skip invalid items (No Course)
         if (empty($item->courseid)) {
-            $debug_log[] = "Item $index: Skipped (No CourseID)";
+            $skipped++;
+            $skipped_course++;
+            $debug_log[] = "Item $index: Skipped (No CourseID) - Please select subject from list";
             continue;
         }
 
@@ -110,9 +149,22 @@ try {
              continue; 
         }
 
+        // Validate Teacher ID exists in tb_member
+        $teacher_id_val = $item->teacher_id;
+        /** @var PDOStatement $stmt_check_teacher */
+        $stmt_check_teacher = $conn->prepare("SELECT COUNT(*) FROM tb_member WHERE member_id = :teacher_id AND member_type = 'teacher'");
+        $stmt_check_teacher->bindParam(':teacher_id', $teacher_id_val, PDO::PARAM_INT);
+        $stmt_check_teacher->execute();
+        $teacher_exists = $stmt_check_teacher->fetchColumn() > 0;
+
+        if (!$teacher_exists) {
+            $skipped++;
+            $debug_log[] = "Item $index: Skipped (Invalid Teacher) - Teacher ID: $teacher_id_val";
+            continue;
+        }
+
         // Bind and Execute Insert
         $courseid_val = $item->courseid;
-        $teacher_id_val = $item->teacher_id; 
         $room_id_val = $item->room_id;
 
         $stmt_insert->bindValue(':courseid', $courseid_val, PDO::PARAM_INT);
@@ -122,27 +174,47 @@ try {
         $stmt_insert->bindValue(':start_time', $start_time_int, PDO::PARAM_INT);
         $stmt_insert->bindValue(':end_time', $end_time_int, PDO::PARAM_INT);
         $stmt_insert->bindValue(':term', $term, PDO::PARAM_STR);
+        
+        // CRITICAL FIX: Always bind group_section to the GLOBAL Header Group
+        // This ensures they all end up in the same History Entry.
         $stmt_insert->bindValue(':group_section', $group, PDO::PARAM_STR);
         
+        // Bind item_group for valid item-specific group data
+        $itemGroup = isset($item->group_section) && !empty($item->group_section) ? $item->group_section : null;
+        $stmt_insert->bindValue(':item_group', $itemGroup, PDO::PARAM_STR);
+        
+        // Bind central_room (can be null/empty)
+        $centralRoom = isset($item->central_room) ? $item->central_room : null;
+        $stmt_insert->bindValue(':central_room', $centralRoom, PDO::PARAM_INT);
+        
         if (!$stmt_insert->execute()) {
-             $debug_log[] = "Item $index: Insert Failed - " . implode(" ", $stmt_insert->errorInfo());
+             $err = implode(" ", $stmt_insert->errorInfo());
+             $debug_log[] = "Item $index: Insert Failed - " . $err;
+             file_put_contents("debug_last_save_log.txt", "Item $index Failed: $err\n", FILE_APPEND);
+             error_log("SaveTotalSchedule Item $index Failed: $err");
         } else {
              $debug_log[] = "Item $index: Inserted successfully";
+             error_log("SaveTotalSchedule Item $index Inserted successfully");
         }
     }
 
     $conn->commit();
     
     $msg = 'บันทึกข้อมูลตารางเรียนเรียบร้อยแล้ว';
-    if ($skipped > 0) {
+    if ($skipped_course > 0) {
+        $msg .= "\n(แจ้งเตือน: มี $skipped_course รายการไม่ถูกบันทึก เนื่องจากไม่พบรหัสวิชา กรุณาเลือกวิชาจากรายการเท่านั้น)";
+    } elseif ($skipped > 0) {
         $msg .= " (ข้าม $skipped รายการที่ไม่ได้ระบุ ครู/ห้อง)";
     }
     
     echo json_encode(['status' => 'success', 'message' => $msg, 'debug' => $debug_log]);
 
 } catch (Exception $e) {
+    /** @var PDO $conn */
+    error_log("SaveTotalSchedule EXCEPTION: " . $e->getMessage());
     if ($conn->inTransaction()) {
         $conn->rollBack();
+        error_log("SaveTotalSchedule Transaction Rolled Back");
     }
     // Check for "Unknown column 'group_section'"
     if (strpos($e->getMessage(), "Unknown column 'group_section'") !== false) {
