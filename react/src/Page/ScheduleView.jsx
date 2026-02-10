@@ -116,9 +116,25 @@ export default function ScheduleView() {
                 };
 
                 if (items.length > 1) {
-                    // Detect "Both" - Map to "Both Timed" Layout structure
-                    cell.isBothTimed = true; // Use this flag to trigger the correct renderer
-                    cell.isBoth = true; // Keep for safety
+                    // คำนวณ span แยกสำหรับแต่ละ item
+                    const span1 = calculateSpan(parseInt(items[0].start_time), parseInt(items[0].end_time));
+                    const span2 = calculateSpan(parseInt(items[1].start_time), parseInt(items[1].end_time));
+                    const maxSpan = Math.max(span1, span2);
+
+                    // ตรวจสอบว่าเป็น both_timed จริงๆ (duration ต่างกัน หรือมี central room)
+                    const hasCentralRoom = !!(items[0].central_room || items[0].central_room_name);
+                    const isTimed = (span1 !== span2) || hasCentralRoom;
+
+                    // อัปเดต cell properties
+                    cell.span = maxSpan;
+                    cell.end = parseInt(p) + maxSpan - 1;
+                    cell.isBothTimed = isTimed;
+                    cell.isBoth = !isTimed; // ถ้าไม่ใช่ timed ก็เป็น both ธรรมดา
+
+                    // คำนวณ period endpoints ถูกต้องสำหรับแต่ละส่วน
+                    const startP = parseInt(p);
+                    cell.topEndPeriod = startP + span1 - 1;
+                    cell.bottomEndPeriod = startP + span2 - 1;
 
                     // Top Item
                     const t1 = items[0].teacher_first_name ? 'อ.' + items[0].teacher_first_name : '';
@@ -128,7 +144,6 @@ export default function ScheduleView() {
                     cell.courseid = items[0].courseid;
                     cell.teacher = items[0].teacher_first_name;
                     cell.room = items[0].room_name;
-                    cell.topEndPeriod = parseInt(p) + span - 1;
 
                     // Bottom Item
                     const t2 = items[1].teacher_first_name ? 'อ.' + items[1].teacher_first_name : '';
@@ -137,7 +152,6 @@ export default function ScheduleView() {
                     cell.bottom = `${items[1].course_code} ${items[1].course_name} ${t2} ${g2} ${r2}`.trim();
                     cell.courseid2 = items[1].courseid;
                     cell.teacher2 = items[1].teacher_first_name;
-                    cell.bottomEndPeriod = parseInt(p) + span - 1;
 
                     // Center
                     cell.centralRoom = items[0].central_room_name || "";
@@ -178,22 +192,14 @@ export default function ScheduleView() {
                                     <div
                                         className="flex flex-col pl-1 h-full pt-1 relative min-w-0"
                                         style={{
-                                            gridColumn: `span ${cell.topEndPeriod - current + 1}`
+                                            gridColumn: `span ${cell.topEndPeriod - current + 1}`,
+                                            // ✅ ใช้ borderRight แทน absolute div
+                                            borderRight: ((cell.topEndPeriod - current + 1) < span) ? '1px solid black' : 'none'
                                         }}
                                     >
                                         <div className="w-full overflow-hidden">
                                             <div className={`w-full text-left whitespace-nowrap text-[12px] leading-tight overflow-hidden`}>{cell.top}</div>
                                         </div>
-                                        {/* Vertical Line for Top Section Only */}
-                                        {((cell.topEndPeriod - current + 1) < span) && (
-                                            <div
-                                                className="absolute top-0 bottom-0 border-r border-black pointer-events-none"
-                                                style={{
-                                                    right: '-1px',
-                                                    zIndex: 40
-                                                }}
-                                            />
-                                        )}
                                     </div>
                                 </div>
 
@@ -206,7 +212,7 @@ export default function ScheduleView() {
                                         }}
                                     >
                                         <svg width="6" height="6" viewBox="0 0 10 10" className="flex-shrink-0"><path d="M10 0 L0 5 L10 10 Z" fill="black" stroke="none" /></svg>
-                                        <div className="flex-1 border-t border-dashed border-black h-px"></div>
+                                        <div className="flex-1 border-t border-black h-px"></div>
                                         <svg width="6" height="6" viewBox="0 0 10 10" className="flex-shrink-0"><path d="M0 0 L10 5 L0 10 Z" fill="black" stroke="none" /></svg>
                                     </div>
                                 </div>
@@ -229,7 +235,7 @@ export default function ScheduleView() {
                                         }}
                                     >
                                         <svg width="6" height="6" viewBox="0 0 10 10" className="flex-shrink-0"><path d="M10 0 L0 5 L10 10 Z" fill="black" stroke="none" /></svg>
-                                        <div className="flex-1 border-t border-dashed border-black h-px"></div>
+                                        <div className="flex-1 border-t border-black h-px"></div>
                                         <svg width="6" height="6" viewBox="0 0 10 10" className="flex-shrink-0"><path d="M0 0 L10 5 L0 10 Z" fill="black" stroke="none" /></svg>
                                     </div>
                                 </div>
@@ -239,22 +245,14 @@ export default function ScheduleView() {
                                     <div
                                         className="flex flex-col justify-end pl-1 h-full pb-1 relative min-w-0"
                                         style={{
-                                            gridColumn: `span ${cell.bottomEndPeriod - current + 1}`
+                                            gridColumn: `span ${cell.bottomEndPeriod - current + 1}`,
+                                            // ✅ ใช้ borderRight แทน absolute div
+                                            borderRight: ((cell.bottomEndPeriod - current + 1) < span) ? '1px solid black' : 'none'
                                         }}
                                     >
                                         <div className="w-full overflow-hidden">
                                             <div className={`w-full text-left whitespace-nowrap text-[12px] leading-tight overflow-hidden`}>{cell.bottom}</div>
                                         </div>
-                                        {/* Vertical Line for Bottom Section Only */}
-                                        {((cell.bottomEndPeriod - current + 1) < span) && (
-                                            <div
-                                                className="absolute top-0 bottom-0 border-r border-black pointer-events-none"
-                                                style={{
-                                                    right: '-1px',
-                                                    zIndex: 40
-                                                }}
-                                            />
-                                        )}
                                     </div>
                                 </div>
                             </div>

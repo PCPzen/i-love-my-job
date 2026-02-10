@@ -217,6 +217,18 @@ function Sidebar() {
             </Link>
           </li>
 
+          {/* พิมพ์แผนการเรียน2.0 */}
+          <li>
+            <Link
+              to="/printplan20"
+              className={`${linkBaseClasses} ${isActive("/printplan20") ? linkActiveClasses : linkInactiveClasses
+                }`}
+            >
+              <LucideIcons.FileText className="w-5 h-5 mr-2" />
+              พิมพ์แผนการเรียน2.0
+            </Link>
+          </li>
+
           {/* ประวัติการจัดตาราง */}
           <li>
             <Link

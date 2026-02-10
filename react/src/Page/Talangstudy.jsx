@@ -115,14 +115,23 @@ export default function ScheduleCreate() {
     // Function to load existing schedule into state
     const fetchEditData = async (infoid, term, group, teachers, rooms) => {
         try {
-            const res = await axios.get(`${API_BASE}/api/GET/GetScheduleByInfo.php?infoid=${infoid}&term=${term}&group=${encodeURIComponent(group || '')}`);
+            console.log("🔍 [FETCH EDIT DATA] Starting...");
+            console.log("📥 Input Parameters:", { infoid, term, group });
+
+            const apiUrl = `${API_BASE}/api/GET/GetScheduleByInfo.php?infoid=${infoid}&term=${term}&group=${encodeURIComponent(group || '')}`;
+            console.log("🌐 API URL:", apiUrl);
+
+            const res = await axios.get(apiUrl);
+
+            console.log("✅ [API RESPONSE] Full Response:", res.data);
 
             if (res.data) {
-                console.log("DEBUG: FetchEditData Response:", res.data);  // Added Log
                 // 1. Set Header Info
                 const h = res.data.header_info;
+                console.log("📋 [HEADER INFO] Raw from API:", h);
+
                 if (h) {
-                    setHeaderInfo({
+                    const newHeaderInfo = {
                         level: h.sublevel,
                         department: h.department || "", // Not available in DB yet
                         group: h.group_section || group || h.group_name,
@@ -130,8 +139,15 @@ export default function ScheduleCreate() {
                         term: h.term || term,
                         year: h.year,
                         infoid: infoid
-                    });
+                    };
+
+                    console.log("✏️ [HEADER INFO] Mapped for State:", newHeaderInfo);
+                    setHeaderInfo(newHeaderInfo);
+                    console.log("✅ [HEADER INFO] State Updated!");
+                } else {
+                    console.warn("⚠️ [HEADER INFO] No header_info in response!");
                 }
+
 
                 // 2. Map Schedule Data to Editor Format
                 const scData = res.data.schedule || [];
@@ -166,12 +182,16 @@ export default function ScheduleCreate() {
                     // Helper for Teacher Name
                     const getTName = (item) => item.teacher_first_name ? `${item.teacher_first_name} ${item.teacher_last_name || ''}`.trim() : "";
 
+                    // Helper for Room Name
+                    const getRName = (item) => item.room_name || "";
+
                     // Item 1 Data
                     const sc1 = firstItem.course_code || "";
                     const sn1 = firstItem.course_name || "";
-                    const r1 = firstItem.room_name || "";
+                    const r1 = getRName(firstItem);
+                    const r1Id = firstItem.room_id;
                     const t1Name = getTName(firstItem);
-                    // Use item_group if available (new logic), else fallback to group_section
+                    const t1Id = firstItem.teacher_id;
                     const g1 = firstItem.item_group || firstItem.group_section || "";
                     const centralId = firstItem.central_room || "";
                     const centralName = firstItem.central_room_name || "";
@@ -185,8 +205,8 @@ export default function ScheduleCreate() {
                         // Core Data
                         subjectCode: sc1,
                         subjectName: sn1,
-                        detail: r1,
-                        teacher: firstItem.teacher_id,
+                        detail: r1Id, // เก็บเป็น room ID
+                        teacher: t1Id,
                         courseid: firstItem.courseid,
                         group: g1,
                         centralRoom: centralName,
@@ -200,11 +220,11 @@ export default function ScheduleCreate() {
                             day: day,
                             start: startP,
                             end: endP,
-                            position: "top", // Will accept update below
+                            position: "top", // Will be updated below
                             subjectCode: sc1,
                             subjectName: sn1,
-                            detail: r1,
-                            teacher: firstItem.teacher_id,
+                            detail: r1Id, // เก็บเป็น ID
+                            teacher: t1Id,
                             courseid: firstItem.courseid,
                             group: g1,
                             topEndPeriod: endP, // Default to same end
@@ -226,8 +246,10 @@ export default function ScheduleCreate() {
                         const secondItem = items[1];
                         const sc2 = secondItem.course_code || "";
                         const sn2 = secondItem.course_name || "";
-                        const r2 = secondItem.room_name || "";
+                        const r2 = getRName(secondItem);
+                        const r2Id = secondItem.room_id;
                         const t2Name = getTName(secondItem);
+                        const t2Id = secondItem.teacher_id;
                         const g2 = secondItem.item_group || secondItem.group_section || "";
 
                         // Duration logic for Second Item
@@ -235,7 +257,6 @@ export default function ScheduleCreate() {
                         const endP2 = startP + duration2 - 1;
 
                         // Check if it's "Both Timed"
-                        // Force isBothTimed if centralRoom exists OR durations differ
                         const isTimed = duration1 !== duration2 || !!centralId;
                         const pos = isTimed ? "both_timed" : "both";
 
@@ -243,7 +264,7 @@ export default function ScheduleCreate() {
                         if (endP2 > endP) {
                             cell.end = endP2;
                             cell.raw.end = endP2;
-                            endP = endP2; // Update local var for consistency
+                            endP = endP2;
                         }
 
                         cell.position = pos;
@@ -251,8 +272,8 @@ export default function ScheduleCreate() {
 
                         cell.subjectCode2 = sc2;
                         cell.subjectName2 = sn2;
-                        cell.detail2 = r2;
-                        cell.teacher2 = secondItem.teacher_id;
+                        cell.detail2 = r2Id; // เก็บเป็น ID
+                        cell.teacher2 = t2Id;
                         cell.courseid2 = secondItem.courseid;
                         cell.group2 = g2;
                         cell.isBothTimed = isTimed;
@@ -261,28 +282,86 @@ export default function ScheduleCreate() {
                         // Update Raw for Editor
                         cell.raw.subjectCode2 = sc2;
                         cell.raw.subjectName2 = sn2;
-                        cell.raw.detail2 = r2;
-                        cell.raw.teacher2 = secondItem.teacher_id;
+                        cell.raw.detail2 = r2Id; // เก็บเป็น ID
+                        cell.raw.teacher2 = t2Id;
                         cell.raw.courseid2 = secondItem.courseid;
                         cell.raw.group2 = g2;
 
                         // Set timed periods for editor
                         cell.raw.topEndPeriod = startP + duration1 - 1;
                         cell.raw.bottomEndPeriod = endP2;
+                        cell.topEndPeriod = startP + duration1 - 1;
+                        cell.bottomEndPeriod = endP2;
 
                         // Update Display
                         if (isTimed) {
                             // Both Timed: แยกข้อมูลบน/ล่าง ชัดเจน
                             cell.top = `${sc1} ${sn1} ${t1Name ? 'อ.' + t1Name : ''} ${g1 ? 'ก.' + g1 : ''} ${r1}`.trim();
                             cell.bottom = `${sc2} ${sn2} ${t2Name ? 'อ.' + t2Name : ''} ${g2 ? 'ก.' + g2 : ''} ${r2}`.trim();
+
+                            // สำหรับ both_timed เก็บข้อมูลแยกสำหรับแสดงผล
+                            cell.topSubject = `${sc1} ${sn1}`.trim();
+                            cell.topLine2 = `${t1Name ? 'อ.' + t1Name : ''} ${g1 ? 'ก.' + g1 : ''} ${r1}`.trim();
+                            cell.topRoom = r1;
+                            cell.bottomSubject = `${sc2} ${sn2}`.trim();
+                            cell.bottomLine2 = `${t2Name ? 'อ.' + t2Name : ''} ${g2 ? 'ก.' + g2 : ''} ${r2}`.trim();
+                            cell.bottomRoom = r2;
                         } else {
                             // Both (Same Time): รวมข้อมูลโดยใช้ /
                             cell.top = `${sc1} ${sn1} / ${sc2} ${sn2}`;
                             cell.bottom = `${r1} ${t1Name ? 'อ.' + t1Name : ''} / ${r2} ${t2Name ? 'อ.' + t2Name : ''}`;
                         }
                     } else {
-                        // Single Item
+                        // Single Item - กำหนด layout properties
                         cell.raw.position = "top";
+
+                        // ตรวจสอบว่าเป็น layout แบบไหน:
+                        // - ถ้ามีทั้ง top และ bottom แต่ไม่มี second item = top/samarn (ข้อมูลล่างมีห้อง/ครู)
+                        // - ถ้ามี duration = 1 คาบ = single period
+
+                        const hasBothTopBottom = !!sc1 && (!!r1 || !!t1Name);
+
+                        if (duration1 === 1 && hasBothTopBottom) {
+                            // Single Period (1 คาบ เท่านั้น)
+                            cell.isSinglePeriod = true;
+                            cell.singleType = "single_samarn"; // default, จะต้องเก็บใน DB ถ้าต้องการแยก CTN
+                            cell.subjectCode = sc1;
+                            cell.group = g1;
+                            cell.teacher = t1Name;
+                            cell.room = r1;
+                            cell.top = sc1;
+
+                            // Bottom: room/teacher
+                            let bottomText = "";
+                            if (r1) bottomText = r1;
+                            if (t1Name) bottomText += (bottomText ? " " : "") + `อ.${t1Name}`;
+                            if (g1) bottomText += (bottomText ? " " : "") + `ก.${g1}`;
+                            cell.bottom = bottomText.trim();
+
+                        } else if (hasBothTopBottom) {
+                            // Normal top/bottom (ตรวจสอบว่าเป็น Samarn หรือ CTN)
+                            // ถ้าข้อมูลในฐานข้อมูลไม่มีบันทึกว่าเป็น type ไหน จะ default เป็น top (normal)
+
+                            // ตัวอย่าง: ถ้าข้อมูลล่างมีรูปแบบ "ห้อง ครู" = Samarn
+                            // ถ้ามีรูปแบบ "ครู ห้อง" = CTN
+                            // แต่เนื่องจากเราไม่ได้เก็บข้อมูลนี้ไว้ เราจะ default เป็น normal first
+
+                            cell.isSamarn = true; // Default เป็น Samarn
+                            cell.room = ""; // Samarn ไม่แสดงห้องทางซ้าย
+
+                            // รวมห้อง + ครู + กลุ่ม ทางขวา
+                            let teacherGroup = "";
+                            if (r1) teacherGroup = r1;
+                            if (t1Name) teacherGroup += (teacherGroup ? " " : "") + `อ.${t1Name}`;
+                            if (g1) teacherGroup += (teacherGroup ? " " : "") + `ก.${g1}`;
+                            cell.teacherGroup = teacherGroup;
+
+                            // เก็บ bottom สำหรับ fallback
+                            cell.bottom = teacherGroup;
+                        } else {
+                            // Only top, no bottom
+                            cell.top = `${sc1} ${sn1}`.trim();
+                        }
                     }
 
                     // Assign to Schedule State
@@ -354,16 +433,44 @@ export default function ScheduleCreate() {
     // Auto-fetch subjects when Header Info matches a plan
     useEffect(() => {
         const autoFetchSubjects = async () => {
+            console.log("🔄 [AUTO FILL] useEffect triggered");
+            console.log("📋 [AUTO FILL] Header Info:", {
+                level: headerInfo.level,
+                group: headerInfo.group,
+                year: headerInfo.year,
+                term: headerInfo.term,
+                infoid: headerInfo.infoid
+            });
+            console.log("📚 [AUTO FILL] Available Study Plans:", studyPlans);
+            console.log("   Count:", studyPlans.length);
+
             let targetPlanId = null;
 
             // 1. Try to find planid from the selected infoid (Group) in studyPlans
+            console.log("🔍 [AUTO FILL] Step 1: Looking for infoid match...");
             if (headerInfo.infoid) {
+                console.log("   Searching for infoid:", headerInfo.infoid);
                 const match = studyPlans.find(p => p.infoid == headerInfo.infoid);
-                if (match) targetPlanId = match.infoid;
+                if (match) {
+                    targetPlanId = match.infoid;
+                    console.log("✅ [AUTO FILL] Found by infoid:", match);
+                } else {
+                    console.log("❌ [AUTO FILL] No match found for infoid:", headerInfo.infoid);
+                }
+            } else {
+                console.log("⚠️ [AUTO FILL] headerInfo.infoid is empty");
             }
 
             // 2. Fallback: Find matching plan by Level/Group/Year
+            console.log("🔍 [AUTO FILL] Step 2: Fallback matching by level/group/year...");
             if (!targetPlanId && headerInfo.level && headerInfo.group && headerInfo.year) {
+                console.log("   Searching for:", {
+                    sublevel: headerInfo.level,
+                    group_name: headerInfo.group,
+                    year: headerInfo.year,
+                    term: headerInfo.term
+                });
+
                 let match = studyPlans.find(p =>
                     p.sublevel == headerInfo.level &&
                     p.group_name == headerInfo.group &&
@@ -372,31 +479,83 @@ export default function ScheduleCreate() {
                 );
 
                 if (!match) {
+                    console.log("   No exact match with term, trying without term...");
                     match = studyPlans.find(p =>
                         p.sublevel == headerInfo.level &&
                         p.group_name == headerInfo.group &&
                         p.year == headerInfo.year
                     );
                 }
-                if (match) targetPlanId = match.infoid;
+
+                if (match) {
+                    targetPlanId = match.infoid;
+                    console.log("✅ [AUTO FILL] Found by level/group/year:", match);
+                } else {
+                    console.log("❌ [AUTO FILL] No match found for level/group/year");
+                }
+            } else {
+                console.log("⚠️ [AUTO FILL] Insufficient data for fallback match");
             }
 
+            console.log("🎯 [AUTO FILL] Target Plan ID:", targetPlanId);
+
             if (targetPlanId) {
-                console.log("Auto-fetching subjects for Info ID:", targetPlanId);
+                console.log("📡 [AUTO FILL] Fetching subjects for Plan ID:", targetPlanId);
                 try {
                     const subs = await getCourseInfo(targetPlanId);
+                    console.log("📥 [AUTO FILL] Raw subjects from API:", subs);
+                    console.log("   Count:", subs ? subs.length : 0);
+
+                    // 🔍 แสดง term ของแต่ละรายวิชา
+                    if (subs && subs.length > 0) {
+                        console.log("   📊 All subject terms:");
+                        subs.forEach((s, idx) => {
+                            console.log(`      [${idx}] ${s.subject_code || s.course_code || 'NO_CODE'} - term: "${s.term}" (type: ${typeof s.term})`);
+                        });
+
+                        // แสดง object เต็มๆ ของ 2 รายการแรกเพื่อดู structure
+                        console.log("   🔬 Sample Objects (first 2):");
+                        console.log("      [0]", subs[0]);
+                        if (subs.length > 1) console.log("      [1]", subs[1]);
+
+                        // แสดง keys ที่มีใน object
+                        console.log("   🔑 Available Keys:", Object.keys(subs[0]));
+                    }
+
                     // Filter subjects: Match Term OR (Term 1 requested AND subject term is empty)
                     const targetTerm = headerInfo.term;
-                    const filteredSubs = subs.filter(s =>
-                        s.term == targetTerm ||
-                        (targetTerm == '1' && !s.term)
-                    );
+                    console.log("🔍 [AUTO FILL] Filtering by term:", targetTerm, "(type:", typeof targetTerm, ")");
+
+                    // ใช้ == แทน === เพื่อ handle type mismatch และแปลงเป็น String
+                    const filteredSubs = subs.filter(s => {
+                        const match = s.term == targetTerm ||
+                            String(s.term) == String(targetTerm) ||
+                            (targetTerm == '1' && !s.term);
+
+                        if (!match) {
+                            console.log(`      ❌ Skip: ${s.subject_code} (term: "${s.term}" ≠ "${targetTerm}")`);
+                        }
+                        return match;
+                    });
+
+                    console.log("✅ [AUTO FILL] Filtered subjects:", filteredSubs);
+                    console.log("   Count:", filteredSubs.length);
+                    if (filteredSubs.length > 0) {
+                        console.log("   Sample:", filteredSubs.slice(0, 3).map(s => ({
+                            code: s.subject_code,
+                            name: s.subject_name,
+                            term: s.term
+                        })));
+                    }
+
                     setAvailableSubjects(filteredSubs || []);
+                    console.log("✅ [AUTO FILL] availableSubjects state updated!");
                 } catch (err) {
-                    console.error("Auto-fetch failed:", err);
+                    console.error("❌ [AUTO FILL] Error fetching subjects:", err);
                     setAvailableSubjects([]);
                 }
             } else {
+                console.warn("⚠️ [AUTO FILL] No targetPlanId found, clearing subjects");
                 setAvailableSubjects([]);
             }
         };
@@ -832,30 +991,55 @@ export default function ScheduleCreate() {
         // Helper function to scale text based on length
         const getScaleClass = (text, span = 1, bold = false, target = 'top') => {
             const currentOffset = fontOffsets[target] || 0;
-            if (!text) return { className: "whitespace-normal break-words overflow-visible", style: { fontSize: "16px" } };
+            if (!text) return {
+                className: "whitespace-normal break-words overflow-visible",
+                style: {
+                    fontSize: "13px",
+                    transform: "scale(1)",
+                    transformOrigin: "left top",  // ขยายจากซ้ายไปขวา, บนลงล่าง
+                    display: "inline-block"
+                }
+            };
+
             const len = text.length;
             const adjustedLen = len / span;
 
-            let size = 14;
+            // ขนาดฐาน (จะไม่เปลี่ยน)
+            const baseSize = 13;
+            let baseSizeMultiplier = 1;
             let weight = "font-normal";
 
-            // "Longer = Expands" logic
-            if (adjustedLen < 2) { size = 24; weight = "font-bold"; }
-            else if (adjustedLen < 4) { size = 20; weight = "font-bold"; }
-            else if (adjustedLen < 6) { size = 18; weight = "font-semibold"; }
-            else if (adjustedLen < 12) { size = 16; weight = "font-normal"; } // Normal
-            // Shrinking
-            else if (adjustedLen > 40) { size = 8; } // Min size increased for readability
-            else if (adjustedLen > 30) { size = 10; }
-            else if (adjustedLen > 22) { size = 11; }
-            else if (adjustedLen > 16) { size = 12; }
+            // คำนวณ multiplier ตามความยาวข้อความ
+            if (adjustedLen < 2) { baseSizeMultiplier = 1.8; weight = "font-bold"; }
+            else if (adjustedLen < 4) { baseSizeMultiplier = 1.5; weight = "font-bold"; }
+            else if (adjustedLen < 6) { baseSizeMultiplier = 1.3; weight = "font-semibold"; }
+            else if (adjustedLen < 12) { baseSizeMultiplier = 1.2; weight = "font-normal"; }
+            else if (adjustedLen > 40) { baseSizeMultiplier = 0.6; }
+            else if (adjustedLen > 30) { baseSizeMultiplier = 0.75; }
+            else if (adjustedLen > 22) { baseSizeMultiplier = 0.85; }
+            else if (adjustedLen > 16) { baseSizeMultiplier = 0.9; }
 
-            const finalSize = size + currentOffset;
-            const baseClass = "leading-tight whitespace-normal break-words overflow-visible";
+            // คำนวณ scale จาก offset (ปุ่ม +/-)
+            // offset +1 = +10% scale, offset -1 = -10% scale
+            const offsetScale = 1 + (currentOffset * 0.1);
+
+            // scale รวม = baseSizeMultiplier * offsetScale
+            const finalScale = baseSizeMultiplier * offsetScale;
+
+            // จำกัด scale ระหว่าง 0.5 - 2.0 เพื่อความปลอดภัย
+            const constrainedScale = Math.min(Math.max(0.5, finalScale), 2.0);
+
+            const baseClass = "leading-tight whitespace-normal break-words";
 
             return {
                 className: `${baseClass} ${bold ? 'font-bold' : weight}`,
-                style: { fontSize: `${finalSize}px` }
+                style: {
+                    fontSize: `${baseSize}px`,  // ล็อคที่ 13px
+                    transform: `scale(${constrainedScale})`,
+                    transformOrigin: "left top",  // ⭐ ขยายจากซ้ายไปขวา แบบเด็ดขาด
+                    display: "inline-block",
+                    maxWidth: "fit-content",
+                }
             };
         };
         const dayData = schedule[day] || {};
@@ -948,17 +1132,20 @@ export default function ScheduleCreate() {
                                                 {cellData.top}
                                             </div>
                                         </div>
-                                        {/* Vertical Line for Top Section Only */}
-                                        {((cellData.topEndPeriod - current + 1) < span) && (
-                                            <div
-                                                className="absolute top-0 bottom-0 border-r border-black pointer-events-none"
-                                                style={{
-                                                    right: '-1px',
-                                                    zIndex: 40
-                                                }}
-                                            />
-                                        )}
                                     </div>
+
+                                    {/* ✅ Vertical Line - อิงจาก parent, ชดเชย padding */}
+                                    {((cellData.topEndPeriod - current + 1) < span) && (
+                                        <div
+                                            className="absolute top-0 bottom-0 pointer-events-none"
+                                            style={{
+                                                width: '1px',
+                                                backgroundColor: 'black',
+                                                left: `calc(${((cellData.topEndPeriod - current + 1) / span) * 100}% - 0.25rem)`,  // ชดเชย pl-1
+                                                zIndex: 40
+                                            }}
+                                        />
+                                    )}
                                 </div>
 
                                 {/* Separator 1 - Grid based */}
@@ -1003,7 +1190,9 @@ export default function ScheduleCreate() {
                                     <div
                                         className="flex flex-col justify-end pl-1 h-full pb-1 relative min-w-0"
                                         style={{
-                                            gridColumn: `span ${cellData.bottomEndPeriod - current + 1}`
+                                            gridColumn: `span ${cellData.bottomEndPeriod - current + 1}`,
+                                            // ✅ ใช้ borderRight แทน absolute div
+                                            borderRight: ((cellData.bottomEndPeriod - current + 1) < span) ? '1px solid black' : 'none'
                                         }}
                                     >
                                         <div className="w-full overflow-hidden">
@@ -1015,16 +1204,6 @@ export default function ScheduleCreate() {
                                                 {cellData.bottom}
                                             </div>
                                         </div>
-                                        {/* Vertical Line for Bottom Section Only */}
-                                        {((cellData.bottomEndPeriod - current + 1) < span) && (
-                                            <div
-                                                className="absolute top-0 bottom-0 border-r border-black pointer-events-none"
-                                                style={{
-                                                    right: '-1px',
-                                                    zIndex: 40
-                                                }}
-                                            />
-                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -1249,6 +1428,7 @@ export default function ScheduleCreate() {
                     </div>
 
                     {/* Font Control & Header */}
+                    {/* ✅ RE-ENABLED: ใช้ CSS Transform Scale ตารางไม่ยืดหด */}
                     <div className="flex justify-end items-center gap-2 mb-2 print:hidden">
                         <div className="flex bg-gray-100 rounded p-1 text-sm border border-gray-300">
                             <button
@@ -1331,101 +1511,122 @@ export default function ScheduleCreate() {
                     </div>
 
                     {/* ---------- ตารางแบบเอกสารจริง (ใช้ logic block + arrow) ---------- */}
-                    <div className="w-full overflow-x-auto mb-8">
-                        <table className="w-full border-collapse border border-black text-[13px] text-center leading-tight table-fixed">
+                    {/* 🔒 LOCKED TABLE: ล็อคขนาดตาราง ไม่ให้ยืดหด */}
+                    <div
+                        className="mb-8"
+                        style={{
+                            width: '1300px',  /* ล็อคความกว้างตาราง */
+                            maxWidth: '1300px',
+                            minWidth: '1300px',
+                            overflow: 'visible',  /* ให้เห็นทั้งหมด */
+                            transform: 'scale(1)',  /* ป้องกันการ zoom */
+                            transformOrigin: 'top left',
+                            zoom: '1',  /* บังคับ zoom 100% */
+                        }}
+                    >
+                        <table
+                            className="border-collapse border border-black text-center leading-tight"
+                            style={{
+                                width: '1300px',  /* ล็อคความกว้างตาราง */
+                                tableLayout: 'fixed',  /* ล็อค layout ตาราง */
+                                fontSize: '13px',  /* ล็อคขนาดตัวอักษร */
+                                minWidth: '1300px',
+                                maxWidth: '1300px',
+                            }}
+                        >
 
 
 
                             <thead>
                                 <tr className="bg-white h-[48px]">
-                                    <th className="border border-black p-1 align-middle min-w-[100px] w-[100px]">เวลา</th>
-                                    <th className="border border-black p-1 min-w-[100px] w-[100px]">
+                                    <th className="border border-black p-1 align-middle" style={{ width: '100px', minWidth: '100px', maxWidth: '100px', fontSize: '13px' }}>เวลา</th>
+                                    <th className="border border-black p-1" style={{ width: '100px', minWidth: '100px', maxWidth: '100px', fontSize: '13px' }}>
                                         07.30
                                         <br />
                                         08.00
                                     </th>
-                                    <th className="border border-black p-1 min-w-[100px] w-[100px]">
+                                    <th className="border border-black p-1" style={{ width: '100px', minWidth: '100px', maxWidth: '100px', fontSize: '13px' }}>
                                         08.00
                                         <br />
                                         09.00
                                     </th>
-                                    <th className="border border-black p-1 min-w-[100px] w-[100px]">
+                                    <th className="border border-black p-1" style={{ width: '100px', minWidth: '100px', maxWidth: '100px', fontSize: '13px' }}>
                                         09.00
                                         <br />
                                         10.00
                                     </th>
-                                    <th className="border border-black p-1 min-w-[100px] w-[100px]">
+                                    <th className="border border-black p-1" style={{ width: '100px', minWidth: '100px', maxWidth: '100px', fontSize: '13px' }}>
                                         10.00
                                         <br />
                                         11.00
                                     </th>
-                                    <th className="border border-black p-1 min-w-[100px] w-[100px]">
+                                    <th className="border border-black p-1" style={{ width: '100px', minWidth: '100px', maxWidth: '100px', fontSize: '13px' }}>
                                         11.00
                                         <br />
                                         12.00
                                     </th>
-                                    <th className="border border-black p-1 min-w-[100px] w-[100px]">
+                                    <th className="border border-black p-1" style={{ width: '100px', minWidth: '100px', maxWidth: '100px', fontSize: '13px' }}>
                                         12.00
                                         <br />
                                         13.00
                                     </th>
-                                    <th className="border border-black p-1 min-w-[100px] w-[100px]">
+                                    <th className="border border-black p-1" style={{ width: '100px', minWidth: '100px', maxWidth: '100px', fontSize: '13px' }}>
                                         13.00
                                         <br />
                                         14.00
                                     </th>
-                                    <th className="border border-black p-1 min-w-[100px] w-[100px]">
+                                    <th className="border border-black p-1" style={{ width: '100px', minWidth: '100px', maxWidth: '100px', fontSize: '13px' }}>
                                         14.00
                                         <br />
                                         15.00
                                     </th>
-                                    <th className="border border-black p-1 min-w-[100px] w-[100px]">
+                                    <th className="border border-black p-1" style={{ width: '100px', minWidth: '100px', maxWidth: '100px', fontSize: '13px' }}>
                                         15.00
                                         <br />
                                         16.00
                                     </th>
-                                    <th className="border border-black p-1 min-w-[100px] w-[100px]">
+                                    <th className="border border-black p-1" style={{ width: '100px', minWidth: '100px', maxWidth: '100px', fontSize: '13px' }}>
                                         16.00
                                         <br />
                                         17.00
                                     </th>
-                                    <th className="border border-black p-1 min-w-[100px] w-[100px]">
+                                    <th className="border border-black p-1" style={{ width: '100px', minWidth: '100px', maxWidth: '100px', fontSize: '13px' }}>
                                         17.00
                                         <br />
                                         18.00
                                     </th>
-                                    <th className="border border-black p-1 min-w-[100px] w-[100px]">
+                                    <th className="border border-black p-1" style={{ width: '100px', minWidth: '100px', maxWidth: '100px', fontSize: '13px' }}>
                                         18.00
                                         <br />
                                         19.00
                                     </th>
                                 </tr>
                                 <tr className="bg-white h-[40px]">
-                                    <th className="border border-black p-1 align-middle">วัน / คาบ</th>
-                                    <th className="border border-black p-1"></th>
-                                    <th className="border border-black p-1">1</th>
-                                    <th className="border border-black p-1">2</th>
-                                    <th className="border border-black p-1">3</th>
-                                    <th className="border border-black p-1">4</th>
-                                    <th className="border border-black p-1">พัก</th>
-                                    <th className="border border-black p-1">5</th>
-                                    <th className="border border-black p-1">6</th>
-                                    <th className="border border-black p-1">7</th>
-                                    <th className="border border-black p-1">8</th>
-                                    <th className="border border-black p-1">9</th>
-                                    <th className="border border-black p-1">10</th>
+                                    <th className="border border-black p-1 align-middle" style={{ fontSize: '13px' }}>วัน / คาบ</th>
+                                    <th className="border border-black p-1" style={{ width: '100px', minWidth: '100px', maxWidth: '100px', fontSize: '13px' }}></th>
+                                    <th className="border border-black p-1" style={{ width: '100px', minWidth: '100px', maxWidth: '100px', fontSize: '13px' }}>1</th>
+                                    <th className="border border-black p-1" style={{ width: '100px', minWidth: '100px', maxWidth: '100px', fontSize: '13px' }}>2</th>
+                                    <th className="border border-black p-1" style={{ width: '100px', minWidth: '100px', maxWidth: '100px', fontSize: '13px' }}>3</th>
+                                    <th className="border border-black p-1" style={{ width: '100px', minWidth: '100px', maxWidth: '100px', fontSize: '13px' }}>4</th>
+                                    <th className="border border-black p-1" style={{ width: '100px', minWidth: '100px', maxWidth: '100px', fontSize: '13px' }}>พัก</th>
+                                    <th className="border border-black p-1" style={{ width: '100px', minWidth: '100px', maxWidth: '100px', fontSize: '13px' }}>5</th>
+                                    <th className="border border-black p-1" style={{ width: '100px', minWidth: '100px', maxWidth: '100px', fontSize: '13px' }}>6</th>
+                                    <th className="border border-black p-1" style={{ width: '100px', minWidth: '100px', maxWidth: '100px', fontSize: '13px' }}>7</th>
+                                    <th className="border border-black p-1" style={{ width: '100px', minWidth: '100px', maxWidth: '100px', fontSize: '13px' }}>8</th>
+                                    <th className="border border-black p-1" style={{ width: '100px', minWidth: '100px', maxWidth: '100px', fontSize: '13px' }}>9</th>
+                                    <th className="border border-black p-1" style={{ width: '100px', minWidth: '100px', maxWidth: '100px', fontSize: '13px' }}>10</th>
                                 </tr>
                             </thead>
 
                             <tbody>
                                 {DAYS.map((day) => (
-                                    <tr key={day} className="h-[70px] align-top">
-                                        <td className="border border-black p-2 font-bold">{day}</td>
+                                    <tr key={day} className="h-[70px] align-top" style={{ height: '70px', minHeight: '70px', maxHeight: '70px' }}>
+                                        <td className="border border-black p-2 font-bold" style={{ width: '100px', minWidth: '100px', maxWidth: '100px', fontSize: '13px' }}>{day}</td>
 
                                         {/* เสาธง (เฉพาะวันจันทร์ rowSpan 5 หรือ render ทุกวัน? ตามโค้ดเดิมคือ rowSpan 5 ที่วันจันทร์) */}
                                         {day === "จันทร์" && (
-                                            <td rowSpan={5} className="border border-black p-1 overflow-hidden h-[350px] max-h-[350px]">
-                                                <div className="h-full flex items-center justify-center transform -rotate-90 text-[12px] whitespace-nowrap">
+                                            <td rowSpan={5} className="border border-black p-1 overflow-hidden h-[350px] max-h-[350px]" style={{ width: '100px', minWidth: '100px', maxWidth: '100px', fontSize: '12px' }}>
+                                                <div className="h-full flex items-center justify-center transform -rotate-90 text-[12px] whitespace-nowrap" style={{ fontSize: '12px' }}>
                                                     กิจกรรมหน้าเสาธง / หัวหน้าแผนก
                                                 </div>
                                             </td>
@@ -1436,8 +1637,8 @@ export default function ScheduleCreate() {
 
                                         {/* พักเที่ยง (เฉพาะวันจันทร์ rowSpan 5) */}
                                         {day === "จันทร์" && (
-                                            <td rowSpan={5} className="border border-black p-1 overflow-hidden h-[350px] max-h-[350px]">
-                                                <div className="h-full flex items-center justify-center transform -rotate-90 text-[12px] whitespace-nowrap">
+                                            <td rowSpan={5} className="border border-black p-1 overflow-hidden h-[350px] max-h-[350px]" style={{ width: '100px', minWidth: '100px', maxWidth: '100px', fontSize: '12px' }}>
+                                                <div className="h-full flex items-center justify-center transform -rotate-90 text-[12px] whitespace-nowrap" style={{ fontSize: '12px' }}>
                                                     พักรับประทานอาหารกลางวัน
                                                 </div>
                                             </td>

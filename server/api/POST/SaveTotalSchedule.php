@@ -49,10 +49,22 @@ try {
         $fields = [];
         $params = [':infoid' => $infoid];
 
-        if ($studentCount !== null) { $fields[] = "student_id = :count"; $params[':count'] = $studentCount; }
-        if ($newYear) { $fields[] = "year = :year"; $params[':year'] = $newYear; }
-        if ($newLevel) { $fields[] = "sublevel = :level"; $params[':level'] = $newLevel; }
-        if ($newGroupName) { $fields[] = "group_name = :gname"; $params[':gname'] = $newGroupName; }
+        if ($studentCount !== null) {
+            $fields[] = "student_id = :count";
+            $params[':count'] = $studentCount;
+        }
+        if ($newYear) {
+            $fields[] = "year = :year";
+            $params[':year'] = $newYear;
+        }
+        if ($newLevel) {
+            $fields[] = "sublevel = :level";
+            $params[':level'] = $newLevel;
+        }
+        if ($newGroupName) {
+            $fields[] = "group_name = :gname";
+            $params[':gname'] = $newGroupName;
+        }
 
         if (!empty($fields)) {
             $sql_update_info = "UPDATE group_information SET " . implode(', ', $fields) . " WHERE infoid = :infoid";
@@ -80,16 +92,16 @@ try {
         // Scoped by courseid, term, AND group_section
         $sql_delete = "DELETE FROM create_study_table WHERE courseid IN ($inQuery) AND term = ? AND group_section = ?";
         $stmt_delete = $conn->prepare($sql_delete);
-        
+
         // Bind Course IDs
         foreach ($course_ids as $k => $id) {
             $stmt_delete->bindValue(($k + 1), $id, PDO::PARAM_INT);
         }
-        
+
         // Bind Term and Group
         $stmt_delete->bindValue(count($course_ids) + 1, $term, PDO::PARAM_STR);
         $stmt_delete->bindValue(count($course_ids) + 2, $group, PDO::PARAM_STR);
-        
+
         $stmt_delete->execute();
     }
 
@@ -120,6 +132,33 @@ try {
     $skipped_course = 0;
     $debug_log = [];
 
+    // ===== OPTIMIZATION: Batch Validate All Teachers BEFORE Loop =====
+    // Collect all unique teacher IDs from schedule
+    $teacherIds = [];
+    foreach ($schedule as $item) {
+        if (!empty($item->teacher_id)) {
+            $teacherIds[] = (int) $item->teacher_id;
+        }
+    }
+    $teacherIds = array_unique($teacherIds);
+
+    // Batch query: Validate all teachers in one query
+    $validTeacherSet = [];
+    if (!empty($teacherIds)) {
+        $placeholders = implode(',', array_fill(0, count($teacherIds), '?'));
+        /** @var PDOStatement $stmt_batch_teachers */
+        $stmt_batch_teachers = $conn->prepare(
+            "SELECT member_id FROM tb_member 
+             WHERE member_id IN ($placeholders) AND member_type = 'teacher'"
+        );
+        $stmt_batch_teachers->execute($teacherIds);
+        $validTeachers = $stmt_batch_teachers->fetchAll(PDO::FETCH_COLUMN);
+
+        // Create hashmap for O(1) lookup
+        $validTeacherSet = array_flip($validTeachers);
+    }
+    // ===== END OPTIMIZATION =====
+
     foreach ($schedule as $index => $item) {
         // Skip invalid items (No Course)
         if (empty($item->courseid)) {
@@ -146,18 +185,12 @@ try {
 
         if ($start_time_int == 0 || $end_time_int == 0) {
             $debug_log[] = "Item $index: Skipped (Invalid Time) - Period: $s_period - $e_period";
-             continue; 
+            continue;
         }
 
-        // Validate Teacher ID exists in tb_member
-        $teacher_id_val = $item->teacher_id;
-        /** @var PDOStatement $stmt_check_teacher */
-        $stmt_check_teacher = $conn->prepare("SELECT COUNT(*) FROM tb_member WHERE member_id = :teacher_id AND member_type = 'teacher'");
-        $stmt_check_teacher->bindParam(':teacher_id', $teacher_id_val, PDO::PARAM_INT);
-        $stmt_check_teacher->execute();
-        $teacher_exists = $stmt_check_teacher->fetchColumn() > 0;
-
-        if (!$teacher_exists) {
+        // ✅ OPTIMIZED: O(1) lookup instead of query
+        $teacher_id_val = (int) $item->teacher_id;
+        if (!isset($validTeacherSet[$teacher_id_val])) {
             $skipped++;
             $debug_log[] = "Item $index: Skipped (Invalid Teacher) - Teacher ID: $teacher_id_val";
             continue;
@@ -174,39 +207,39 @@ try {
         $stmt_insert->bindValue(':start_time', $start_time_int, PDO::PARAM_INT);
         $stmt_insert->bindValue(':end_time', $end_time_int, PDO::PARAM_INT);
         $stmt_insert->bindValue(':term', $term, PDO::PARAM_STR);
-        
+
         // CRITICAL FIX: Always bind group_section to the GLOBAL Header Group
         // This ensures they all end up in the same History Entry.
         $stmt_insert->bindValue(':group_section', $group, PDO::PARAM_STR);
-        
+
         // Bind item_group for valid item-specific group data
         $itemGroup = isset($item->group_section) && !empty($item->group_section) ? $item->group_section : null;
         $stmt_insert->bindValue(':item_group', $itemGroup, PDO::PARAM_STR);
-        
+
         // Bind central_room (can be null/empty)
         $centralRoom = isset($item->central_room) ? $item->central_room : null;
         $stmt_insert->bindValue(':central_room', $centralRoom, PDO::PARAM_INT);
-        
+
         if (!$stmt_insert->execute()) {
-             $err = implode(" ", $stmt_insert->errorInfo());
-             $debug_log[] = "Item $index: Insert Failed - " . $err;
-             file_put_contents("debug_last_save_log.txt", "Item $index Failed: $err\n", FILE_APPEND);
-             error_log("SaveTotalSchedule Item $index Failed: $err");
+            $err = implode(" ", $stmt_insert->errorInfo());
+            $debug_log[] = "Item $index: Insert Failed - " . $err;
+            file_put_contents("debug_last_save_log.txt", "Item $index Failed: $err\n", FILE_APPEND);
+            error_log("SaveTotalSchedule Item $index Failed: $err");
         } else {
-             $debug_log[] = "Item $index: Inserted successfully";
-             error_log("SaveTotalSchedule Item $index Inserted successfully");
+            $debug_log[] = "Item $index: Inserted successfully";
+            error_log("SaveTotalSchedule Item $index Inserted successfully");
         }
     }
 
     $conn->commit();
-    
+
     $msg = 'บันทึกข้อมูลตารางเรียนเรียบร้อยแล้ว';
     if ($skipped_course > 0) {
         $msg .= "\n(แจ้งเตือน: มี $skipped_course รายการไม่ถูกบันทึก เนื่องจากไม่พบรหัสวิชา กรุณาเลือกวิชาจากรายการเท่านั้น)";
     } elseif ($skipped > 0) {
         $msg .= " (ข้าม $skipped รายการที่ไม่ได้ระบุ ครู/ห้อง)";
     }
-    
+
     echo json_encode(['status' => 'success', 'message' => $msg, 'debug' => $debug_log]);
 
 } catch (Exception $e) {
@@ -219,12 +252,11 @@ try {
     // Check for "Unknown column 'group_section'"
     if (strpos($e->getMessage(), "Unknown column 'group_section'") !== false) {
         echo json_encode(['status' => 'error', 'message' => 'Database Error: Missing "group_section". Update DB.']);
-    } 
+    }
     // Check for FK Constraint (1452)
     else if (strpos($e->getMessage(), "1452") !== false) {
-         echo json_encode(['status' => 'error', 'message' => 'บันทึกไม่สำเร็จ: มีข้อมูล ครู หรือ ห้อง ที่ไม่ถูกต้อง (Foreign Key Error)']);
-    }
-    else {
+        echo json_encode(['status' => 'error', 'message' => 'บันทึกไม่สำเร็จ: มีข้อมูล ครู หรือ ห้อง ที่ไม่ถูกต้อง (Foreign Key Error)']);
+    } else {
         echo json_encode(['status' => 'error', 'message' => 'เกิดข้อผิดพลาด: ' . $e->getMessage()]);
     }
 }

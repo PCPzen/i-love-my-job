@@ -24,6 +24,7 @@ import Intomohou from "./Page/Intomohou";
 import Studentroomadd from "./Page/Studentroomadd";
 import HistorySchedule from "./Page/HistorySchedule";
 import ScheduleView from "./Page/ScheduleView";
+import PrintPlan20 from "./Page/PrintPlan20";
 
 export default function App() {
   return (
@@ -56,6 +57,7 @@ export default function App() {
       {/* ตารางเรียน */}
       <Route path="/talangstudy" element={<TalangStudy />} />
       <Route path="/talangplan" element={<TalangPlan />} />
+      <Route path="/printplan20" element={<PrintPlan20 />} />
 
       {/* 404 */}
       <Route path="*" element={<h1 style={{ textAlign: "center", marginTop: 50 }}>404 - ไม่พบหน้า</h1>} />
