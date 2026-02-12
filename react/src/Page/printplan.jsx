@@ -84,15 +84,17 @@ const Printplan = () => {
     let level = "ไม่ระบุ";
     let year = "";
 
-    if (subLevel.includes("ปวช.")) {
-        level = "ปวช.";
-        year = subLevel.replace("ปวช.", ""); // ดึงเฉพาะตัวเลขปี
-    } else if (subLevel.includes("ปวส.") && subLevel.includes("ม.6")) {
-        level = "ปวส.ม.6";
-        year = subLevel.replace("ปวส.ม.6.", "");
-    } else if (subLevel.includes("ปวส.")) {
-        level = "ปวส.";
-        year = subLevel.replace("ปวส.", "");
+    if (subLevel && subLevel !== "ไม่ระบุ") {
+        if (subLevel.includes("ปวช.")) {
+            level = "ปวช.";
+            year = subLevel.replace("ปวช.", ""); // ดึงเฉพาะตัวเลขปี
+        } else if (subLevel.includes("ปวส.") && subLevel.includes("ม.6")) {
+            level = "ปวส.ม.6";
+            year = subLevel.replace("ปวส.ม.6.", "");
+        } else if (subLevel.includes("ปวส.")) {
+            level = "ปวส.";
+            year = subLevel.replace("ปวส.", "");
+        }
     }
 
 
